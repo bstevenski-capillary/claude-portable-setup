@@ -3,10 +3,17 @@
 
   "model": "claude-opus-5",
   "effortLevel": "medium",
-  "theme": "dark",
+  "theme": "dark-ansi",
   "tui": "fullscreen",
 
   "skillListingBudgetFraction": 0.02,
+
+  "_statusLine_comment": "Live context gauge + this session's weighted token burn. Context is re-read on EVERY turn, so cost scales with (context size x turns) — with no instrument a session drifts from a ~90k baseline to 260k+ and every trivial reply starts costing ~26k weighted tokens before it thinks a word. The built-in corner indicator is too passive to notice mid-task; this sits in front of you on every turn.",
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/hooks/statusline-context.sh",
+    "padding": 0
+  },
 
   "attribution": {
     "commit": "",
@@ -33,6 +40,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "_comment": "Task-boundary nudge: suggests /clear at the one moment it is free — right after a commit/PR/merge/push has banked the work AND context is already expensive. Fires on both conditions or not at all; a nudge that fires on every threshold crossing becomes wallpaper, which is exactly how the passive indicator stopped being read.",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/clear-nudge.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
 
@@ -42,17 +62,34 @@
   },
 
   "enabledPlugins": {
-    "_comment": "Public marketplace plugins carried over. Install with: claude plugin install <id>",
-    "claude-code-setup@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
+    "_comment": "Public marketplace plugins. Install with: claude plugin install <id>. The `false` entries are kept deliberately rather than deleted — they record which plugins were evaluated and switched OFF, so the decision survives. Every enabled plugin spends context on skill listings whether or not it is ever used; trimming this map from 27 enabled to the set below recovered ~30k tokens of listing per session. Re-enabling is one flag, so bias toward off.",
+
+    "skill-creator@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
     "commit-commands@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "playwright@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "agent-sdk-dev@claude-plugins-official": true
+    "agent-sdk-dev@claude-plugins-official": true,
+    "explanatory-output-style@claude-plugins-official": true,
+    "remember@claude-plugins-official": true,
+    "circleback@claude-plugins-official": true,
+
+    "claude-code-setup@claude-plugins-official": false,
+    "claude-md-management@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false,
+    "plugin-dev@claude-plugins-official": false,
+    "mcp-server-dev@claude-plugins-official": false,
+    "hookify@claude-plugins-official": false,
+    "playground@claude-plugins-official": false,
+    "huggingface-skills@claude-plugins-official": false,
+    "netlify-skills@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false
   }
 }

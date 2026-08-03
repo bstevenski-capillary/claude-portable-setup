@@ -167,6 +167,48 @@ OUT=$(run_siren)
 assert_has "nope-x" "$OUT" "corrupt cache → other checks still run"
 teardown
 
+# ── 11. partial coverage: a watched CLI with no npm key is a finding ────────
+# The siren's own rot-watch.json shipped with 2 watched CLIs and only 1 `npm`
+# key, so drift detection covered half the watchlist and said nothing about the
+# other half. Omission read as coverage — the exact false-green this hook exists
+# to catch, reproduced inside its own config.
+setup
+config '{"watch":[{"cli":"mycli"}]}'
+OUT=$(run_siren)
+assert_has "partial coverage" "$OUT" "cli without npm key → partial-coverage finding"
+assert_has "mycli" "$OUT" "  finding names the uncovered CLI"
+teardown
+
+# ── 12. the opt-out must be explicit, never inferred from omission ───────────
+# Not everything on PATH is published to npm. Declaring that is one key; the
+# point is that silence is EARNED by a declaration rather than granted by an
+# omission — same rule as "no config = silent, empty watchlist = finding".
+setup
+config '{"watch":[{"cli":"mycli","npm_exempt":true}]}'
+OUT=$(run_siren)
+[ -z "$OUT" ] && ok "cli + npm_exempt → silent (coverage gap declared intentional)" \
+              || bad "cli + npm_exempt → silent" "empty output" "$OUT"
+teardown
+
+# ── 13. a fully covered entry must not draw the warning ─────────────────────
+# Guards the other direction: if this fired on covered entries too it would be
+# unconditional noise, and an unconditional warning is one nobody reads.
+setup
+config '{"watch":[{"cli":"mycli","npm":"mypkg"}]}'
+cache "{\"mypkg\":{\"latest\":\"6.4.0\",\"checked\":\"$(hours_ago 1)\"}}"
+OUT=$(run_siren)
+assert_not "partial coverage" "$OUT" "cli WITH npm key → no partial-coverage warning"
+teardown
+
+# ── 14. the warning is not a check — it must not inflate the denominator ────
+# CHECKS_RUN counts checks that actually executed. Counting a coverage COMPLAINT
+# as a check would pad the very number this siren exists to keep honest.
+setup
+config '{"watch":[{"cli":"mycli"}]}'
+OUT=$(run_siren)
+assert_has "across 1 check(s)" "$OUT" "coverage warning does not increment CHECKS_RUN"
+teardown
+
 # ── report ───────────────────────────────────────────────────────────────────
 printf '\n  %s────────────────────────────────────────%s\n' "$C_DIM" "$C_OFF"
 if [ "$FAIL" -eq 0 ]; then

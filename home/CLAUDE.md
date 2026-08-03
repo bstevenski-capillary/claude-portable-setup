@@ -38,9 +38,31 @@ version skew — before any work starts.
 - **No config = silent by design.** Nothing was asked for, so nothing is claimed.
 - **A watchlist that exists but is empty reports itself** — coverage was intended
   and isn't there. That is the rule-2 behavior, not a bug.
+- **A watched `cli` with no `npm` key reports itself too** — the drift check
+  silently skips it, so a half-covered watchlist would otherwise look identical
+  to a full one. Declare `"npm_exempt": true` if the CLI genuinely isn't
+  published; silence is earned by declaring the gap, never by omitting the key.
 
 If the siren fires, surface it in the first message of the session and treat it
 as outranking new work.
+
+## Context instruments
+
+Two hooks make context cost visible, because cost scales with *(context size ×
+turns)* and the built-in indicator is passive enough to be noticed several tasks
+too late.
+
+- `~/.claude/hooks/statusline-context.sh` — statusline gauge and session burn,
+  derived from real usage records rather than an estimate. **A blank statusline
+  means the hook died**, and blank looks exactly like 0%; treat it as a finding.
+- `~/.claude/hooks/clear-nudge.sh` — PostToolUse on `Bash`. Suggests `/clear`
+  only when a commit/PR/merge/push has banked the work *and* context is already
+  past 100k. When it fires, offer `/clear` in one short line if the next request
+  starts genuinely new work — and say nothing if the same thread is continuing.
+  Nagging is what retired the passive indicator.
+
+All three hooks have executable regression tests in the bundle repo
+(`./tests/run-all.sh`). Every bug that has escaped one has a case there.
 
 ## Skill selection
 

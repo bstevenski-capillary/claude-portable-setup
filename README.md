@@ -25,9 +25,12 @@ existing config without asking.
 | `home/CLAUDE.md` | `~/.claude/CLAUDE.md` | Claude Code-specific mechanics only — the visual level dial, the siren, skill selection, worktree isolation, permission hygiene. Opens by `@import`ing the shared file above |
 | `home/skills/visual-decisions/` | `~/.claude/skills/` | Personal skill: render a visual before any non-trivial decision, with a latency/cost level dial |
 | `home/hooks/tooling-rot-siren.sh` | `~/.claude/hooks/` | SessionStart hook: catches degraded local tooling (missing/disabled plugin, stale marketplace checkout, CLI-vs-plugin version skew) before work starts |
-| `home/hooks/rot-watch.example.json` | `~/.claude/hooks/` | Watchlist config for the siren. No config = silent. |
-| `home/settings.template.json` | merge into `~/.claude/settings.json` | Model, effort, theme, notifications, empty-by-design permissions, plugin list, hook wiring |
+| `home/hooks/rot-watch.example.json` | `~/.claude/hooks/` | Watchlist config for the siren. No config = silent; a `cli` with no `npm` key = partial coverage, and it says so |
+| `home/hooks/statusline-context.sh` | `~/.claude/hooks/` | Statusline: live context gauge + this session's weighted token burn, read from the transcript's real usage records |
+| `home/hooks/clear-nudge.sh` | `~/.claude/hooks/` | PostToolUse hook: suggests `/clear` only when a commit/PR/merge/push has banked the work **and** context is already expensive |
+| `home/settings.template.json` | merge into `~/.claude/settings.json` | Model, effort, theme, notifications, empty-by-design permissions, plugin list, statusline + hook wiring |
 | `home/memory/` | `~/.claude/projects/<project>/memory/` | Seed memory: the visual-learner fact |
+| `tests/` | — | Executable regression tests for all three hooks (58 cases). `./tests/run-all.sh` |
 
 ## The two ideas worth keeping even if you drop the rest
 

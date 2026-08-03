@@ -94,6 +94,7 @@ EOF
 #   stale_days      freshness threshold for the marketplace checkout (default 14)
 #   npm             npm package name; cached registry latest vs installed version
 #   npm_ttl_hours   how old the cached registry answer may get (default 24)
+#   npm_exempt      true = this cli is deliberately not npm-checked (see check 5)
 WATCH=$(python3 - "$CONFIG" <<'EOF'
 import json, sys
 try:
@@ -110,6 +111,7 @@ for w in cfg.get("watch", []):
         w.get("plugin", ""), w.get("marketplace", ""),
         w.get("cli", ""), str(w.get("stale_days", 14)),
         w.get("npm", ""), str(w.get("npm_ttl_hours", 24)),
+        "true" if w.get("npm_exempt") else "false",
     ]))
 EOF
 )
@@ -136,7 +138,7 @@ fi
 # Read on FD 3, not stdin: children spawned in the loop body inherit stdin and
 # can consume it. Keeping the watchlist on its own descriptor makes the loop
 # structurally immune to that, regardless of what a watched command does.
-while IFS=$'\x1f' read -r -u 3 PLUGIN MKT_NAME CLI STALE_DAYS NPM_PKG NPM_TTL; do
+while IFS=$'\x1f' read -r -u 3 PLUGIN MKT_NAME CLI STALE_DAYS NPM_PKG NPM_TTL NPM_EXEMPT; do
   [ -z "$PLUGIN$MKT_NAME$CLI$NPM_PKG" ] && continue
   LABEL="${PLUGIN:-${CLI:-${MKT_NAME:-$NPM_PKG}}}"
   MKT="$CLAUDE_DIR/plugins/marketplaces/$MKT_NAME"
@@ -237,6 +239,25 @@ EOF
         FINDINGS+=("$LABEL: npm check is stale — cache ${CACHE_AGE}h old, cannot confirm $LOCAL_VER is still current (refresh dispatched)")
       fi
     fi
+  fi
+
+  # 5. Coverage honesty about the watchlist ITSELF. Checks 1-4 report on what
+  #    they were pointed at; none of them can notice being pointed at nothing.
+  #    A `cli` with no `npm` key silently skips check 4 for that entry, so a
+  #    half-covered watchlist reports exactly like a fully covered one.
+  #
+  #    Not hypothetical: this siren's own config watched two CLIs and named an
+  #    npm package for one. Drift detection covered 1 of 2 and said nothing
+  #    about the other — the omission read as coverage. That is the same
+  #    false-green shape as "0 tests failed" out of zero tests, reproduced
+  #    inside the tool built to catch it.
+  #
+  #    Deliberately NOT counted in CHECKS_RUN: the complaint is that no check
+  #    ran, so counting it would pad the denominator this hook exists to keep
+  #    honest. And silence must be EARNED by declaring npm_exempt, never
+  #    granted by omission — otherwise the quiet state is the unconfigured one.
+  if [ -n "$CLI" ] && [ -z "$NPM_PKG" ] && [ "$NPM_EXEMPT" != "true" ]; then
+    FINDINGS+=("$LABEL: partial coverage — CLI '$CLI' is watched but no 'npm' key names a package, so published-version drift is NOT checked for it. Add \"npm\": \"<package>\", or \"npm_exempt\": true if it is not published to npm.")
   fi
 done 3<<< "$WATCH"
 

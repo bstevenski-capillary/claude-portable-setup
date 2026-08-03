@@ -83,6 +83,7 @@ empty **will** report itself — coverage was intended and isn't there.
 | `marketplace` | git checkout age vs `stale_days` | no |
 | `cli` | on PATH, and `--version` vs the plugin version | no |
 | `npm` | installed version vs the registry's `latest` | **cached only** |
+| `npm_exempt` | *declares* that a `cli` is deliberately not npm-checked | no |
 
 The first three compare local things to each other, so a machine can be
 perfectly self-consistent and still be a year behind the registry. `npm` closes
@@ -98,17 +99,50 @@ session. Consequences worth knowing:
   silence. A blocking `npm view` would instead hit the 10s hook timeout and be
   killed mid-run, printing nothing, which is indistinguishable from all-clear.
 
-### Testing it
+### Partial coverage is a finding too
 
-The repo ships executable tests — run these against the working copy:
+The checks above report on what they were pointed at. None of them can notice
+being pointed at *nothing* — so an entry with a `cli` and no `npm` key skips the
+drift check silently, and a half-covered watchlist reports identically to a
+fully covered one.
 
-```bash
-./tests/test-siren.sh
+This siren's own config shipped that way: two watched CLIs, one `npm` key. Drift
+detection covered 1 of 2 and said nothing about the other. So the siren now
+flags any `cli` with no `npm` package named:
+
+```
+partial coverage — CLI 'foo' is watched but no 'npm' key names a package,
+so published-version drift is NOT checked for it.
 ```
 
-17 cases covering the abstention path, field-shift regressions, npm drift, and
-the no-network-on-the-hot-path contract. Every bug that has escaped this hook
-has a case there.
+If the CLI genuinely isn't published to npm, declare it:
+
+```json
+{ "cli": "foo", "npm_exempt": true }
+```
+
+Silence is **earned by declaring the gap**, never granted by omitting the key —
+otherwise the quiet state is the unconfigured one, which is the whole failure
+mode this hook exists to prevent.
+
+### Testing it
+
+The repo ships executable tests — run them all against the working copy:
+
+```bash
+./tests/run-all.sh          # every suite
+./tests/test-siren.sh       # or one at a time
+```
+
+| Suite | Cases | Covers |
+|---|---|---|
+| `test-siren.sh` | 22 | abstention path, field-shift regressions, npm drift, partial coverage, the no-network-on-the-hot-path contract |
+| `test-nudge.sh` | 19 | intent-vs-evidence, compound-command failures, both firing conditions, sidechain isolation |
+| `test-statusline.sh` | 17 | last-record-not-sum, billing weights, colour thresholds, truncated-line survival |
+
+Every bug that has escaped these hooks has a case there. `run-all.sh` treats
+**zero matched suites as a failure**, not a pass — a runner that globs, matches
+nothing, and exits 0 is the same false green the hooks themselves watch for.
 
 The probes below are different and still worth running once: they exercise the
 **deployed** copy at `~/.claude/hooks/`, catching install-time problems (wrong
@@ -161,7 +195,56 @@ Expect a `npm` entry with a `latest` and a fresh `checked` timestamp. Nothing
 written means the deployed hook cannot refresh, and every later npm finding will
 be based on data frozen at install time.
 
-## 4. Settings
+## 4. Context instruments
+
+Two hooks that make context cost visible and act on it. They are independent of
+the siren and of each other; install either alone.
+
+```bash
+cp home/hooks/statusline-context.sh home/hooks/clear-nudge.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/statusline-context.sh ~/.claude/hooks/clear-nudge.sh
+```
+
+Both are wired in `home/settings.template.json` (section 5) — `statusLine` for
+the first, a `PostToolUse` matcher on `Bash` for the second.
+
+**Why they exist.** Context is re-read on every turn, so cost scales with
+*(context size × turns)*. With no instrument, a session drifts from a ~90k
+baseline to 260k+ and every trivial reply costs ~26k weighted tokens before it
+produces a word. The built-in corner indicator is passive enough that it gets
+noticed several tasks too late.
+
+### `statusline-context.sh` — the gauge
+
+Renders `repo · ▓▓▓▓▓░░░░░ 52% 104k · burn 1.2M · Opus 5` on every turn. The
+context figure is read from the **last non-sidechain usage record** in the
+transcript — the number the API actually billed, not an estimate. Colour is the
+signal: green under 60%, amber past 60, red past 80.
+
+`burn` is the session total, weighted by billing class
+(output ×5, cache-write ×1.25, cache-read ×0.1, input ×1). Subagent turns count
+toward burn but never move the gauge — they spend real tokens, but they were
+never in the main thread's window.
+
+### `clear-nudge.sh` — the boundary nudge
+
+Suggests `/clear` at the one moment it is free: right after a commit, PR, merge,
+or push has **banked** the work, *and* context is already past 100k. Both
+conditions or it stays quiet.
+
+That second condition is the load-bearing one. A nudge that fires on every
+threshold crossing regardless of what you're mid-way through becomes wallpaper —
+which is exactly how the passive indicator stopped being read.
+
+It requires **evidence, not intent**: the tool's own output must show the
+boundary happened. This shipped a false positive keying on the command string
+alone, and announced a commit that never occurred — a grep, an echo, a doc
+example, and a test fixture all contain `git commit`. It also discards the whole
+call if any part errored, because compound commands (`a; b; c`) report a single
+exit status, so a failed push chained with a succeeding command arrives looking
+successful. `tests/test-nudge.sh` pins both cases.
+
+## 5. Settings
 
 `home/settings.template.json` is a **template, not a drop-in** — it carries
 `_comment` keys for readability that should be stripped, and its plugin list
@@ -179,12 +262,18 @@ Then install the plugins listed under `enabledPlugins`:
 claude plugin install <plugin-id>
 ```
 
-All of them are from the public `claude-plugins-official` marketplace. Install
-what's actually useful here rather than all of them reflexively — a bloated
-skill listing makes the right skill harder to pick, which is the problem
-`skillOverrides` exists to solve.
+All of them are from the public `claude-plugins-official` marketplace. Only the
+entries set to `true` need installing — the `false` ones are kept in the file on
+purpose, recording which plugins were evaluated and switched **off** so the
+decision survives rather than being silently re-made on the next machine.
 
-## 5. Memory seed (optional)
+Install what's actually useful here rather than all of them reflexively. Every
+enabled plugin spends context on skill listings whether or not you ever use it;
+trimming this map from 27 enabled to the current set recovered ~30k tokens of
+listing per session. That is the same problem `skillOverrides` exists to solve,
+one level up — and re-enabling one is a single flag, so bias toward off.
+
+## 6. Memory seed (optional)
 
 The memory directory is per-project and named after the project path, so it
 can't be copied blind. Once a project directory exists at
@@ -200,6 +289,13 @@ the agent re-derive the fact, since shared rule 1 in
 - [ ] The agent can state rule 3 as "always do TDD" — proves the `@import` of
       `~/.config/ai-rules/global.md` resolved rather than failing silently
 - [ ] The siren smoke-test above printed the empty-watchlist finding
+- [ ] `./tests/run-all.sh` reports 3 suites, all clean
+- [ ] The statusline renders a bar, a percentage, and a `burn` figure on a new
+      session — a *blank* statusline means the hook died, and blank is
+      indistinguishable from 0%
+- [ ] Every watched `cli` in `rot-watch.json` either names an `npm` package or
+      declares `"npm_exempt": true` — otherwise the siren is reporting on a
+      watchlist it only half-checks
 - [ ] `~/.claude/settings.json` parses (`python3 -m json.tool ~/.claude/settings.json`)
 - [ ] No `_comment` keys survived into the live settings file
 - [ ] The agent renders a visual before the next decision it puts to you —
