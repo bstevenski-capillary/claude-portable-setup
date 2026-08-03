@@ -1,9 +1,15 @@
 #!/bin/bash
 # SessionStart tooling-rot siren.
 #
-# Yells about degraded local tooling BEFORE any work starts. Local-only checks
-# (<1s, no network). On findings it injects a loud warning into session context
-# AND shows the user a systemMessage.
+# Yells about degraded local tooling BEFORE any work starts. On findings it
+# injects a loud warning into session context AND shows the user a systemMessage.
+#
+# The hot path is local-only and <1s — it never waits on the network. The npm
+# registry check reads a CACHE file written by a detached background refresh,
+# so a slow or absent network can delay freshness but can never delay (or, via
+# the hook timeout, silently kill) SessionStart. That distinction is the whole
+# design: a siren that hangs is a siren that reports nothing, which is
+# indistinguishable from a siren that reports all-clear.
 #
 # Born of an incident where a test toolchain ran silently broken for ~7 weeks
 # while every surface reported green.
@@ -19,8 +25,42 @@ set -u
 
 CLAUDE_DIR="$HOME/.claude"
 CONFIG="$CLAUDE_DIR/hooks/rot-watch.json"
+CACHE="$CLAUDE_DIR/hooks/.rot-npm-cache.json"
 FINDINGS=()
+NEED_REFRESH=()
 CHECKS_RUN=0
+
+# ------------------------------------------------------- background refresh --
+# Re-entrant mode: the hot path re-invokes this script detached to refresh the
+# npm cache, so the network call happens in a process nobody is waiting on.
+# Writes are atomic (os.replace) because a session may read the cache at any
+# moment — a half-written cache would read as corrupt and fire a false finding.
+if [ "${1:-}" = "--refresh-npm-cache" ]; then
+  shift
+  for PKG in "$@"; do
+    VER=$(npm view "$PKG" version 2>/dev/null </dev/null | tr -d '[:space:]')
+    [ -n "$VER" ] || continue
+    python3 - "$CACHE" "$PKG" "$VER" <<'EOF'
+import json, sys, os, datetime as d
+path, pkg, ver = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    cache = json.load(open(path))
+    if not isinstance(cache, dict):
+        cache = {}
+except Exception:
+    cache = {}          # absent or corrupt: rebuild rather than abort
+cache[pkg] = {
+    "latest": ver,
+    "checked": d.datetime.now(d.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+}
+tmp = path + ".tmp.%d" % os.getpid()
+with open(tmp, "w") as fh:
+    json.dump(cache, fh, indent=2)
+os.replace(tmp, path)
+EOF
+  done
+  exit 0
+fi
 
 emit() {
   # emit <systemMessage-body>
@@ -48,10 +88,12 @@ EOF
 
 # ------------------------------------------------------------ read watchlist --
 # Each watch entry may set any subset of:
-#   plugin        plugin id, e.g. "mytool@my-marketplace"  (installed + enabled)
-#   marketplace   marketplace dir name under plugins/marketplaces (git freshness)
-#   cli           command name on PATH  (presence, and version vs plugin)
-#   stale_days    freshness threshold for the marketplace checkout (default 14)
+#   plugin          plugin id, e.g. "mytool@my-marketplace"  (installed + enabled)
+#   marketplace     marketplace dir name under plugins/marketplaces (git freshness)
+#   cli             command name on PATH  (presence, and version vs plugin)
+#   stale_days      freshness threshold for the marketplace checkout (default 14)
+#   npm             npm package name; cached registry latest vs installed version
+#   npm_ttl_hours   how old the cached registry answer may get (default 24)
 WATCH=$(python3 - "$CONFIG" <<'EOF'
 import json, sys
 try:
@@ -67,6 +109,7 @@ for w in cfg.get("watch", []):
     print("\x1f".join([
         w.get("plugin", ""), w.get("marketplace", ""),
         w.get("cli", ""), str(w.get("stale_days", 14)),
+        w.get("npm", ""), str(w.get("npm_ttl_hours", 24)),
     ]))
 EOF
 )
@@ -93,11 +136,12 @@ fi
 # Read on FD 3, not stdin: children spawned in the loop body inherit stdin and
 # can consume it. Keeping the watchlist on its own descriptor makes the loop
 # structurally immune to that, regardless of what a watched command does.
-while IFS=$'\x1f' read -r -u 3 PLUGIN MKT_NAME CLI STALE_DAYS; do
-  [ -z "$PLUGIN$MKT_NAME$CLI" ] && continue
-  LABEL="${PLUGIN:-${CLI:-$MKT_NAME}}"
+while IFS=$'\x1f' read -r -u 3 PLUGIN MKT_NAME CLI STALE_DAYS NPM_PKG NPM_TTL; do
+  [ -z "$PLUGIN$MKT_NAME$CLI$NPM_PKG" ] && continue
+  LABEL="${PLUGIN:-${CLI:-${MKT_NAME:-$NPM_PKG}}}"
   MKT="$CLAUDE_DIR/plugins/marketplaces/$MKT_NAME"
   PLUGIN_VER="unknown"
+  CLI_VER="unknown"   # hoisted: the npm check below needs it even if no cli key
 
   # 1. Plugin installed AND enabled. (A past failure: flat files bypassed the
   #    plugin system entirely, so nothing tracked versions at all.)
@@ -150,7 +194,63 @@ import json;print(json.load(open('$MKT/.claude-plugin/plugin.json'))['version'])
       FINDINGS+=("$LABEL: CLI '$CLI' not on PATH")
     fi
   fi
+
+  # 4. Published-version drift. The checks above all compare local things to
+  #    each other, so a machine can be perfectly self-consistent and a year
+  #    behind the registry — which is exactly how a stale CLI goes unnoticed.
+  #    Read-only against a cache; the refresh is dispatched after the loop.
+  if [ -n "$NPM_PKG" ]; then
+    CHECKS_RUN=$((CHECKS_RUN + 1))
+    CACHED=$(python3 - "$CACHE" "$NPM_PKG" <<'EOF'
+import json, sys, datetime as d
+try:
+    entry = json.load(open(sys.argv[1]))[sys.argv[2]]
+    checked = d.datetime.strptime(entry["checked"], "%Y-%m-%dT%H:%M:%SZ") \
+               .replace(tzinfo=d.timezone.utc)
+    age_h = (d.datetime.now(d.timezone.utc) - checked).total_seconds() / 3600
+    print("%s\x1f%.1f" % (entry["latest"], age_h))
+except Exception:
+    print("__NONE__")   # absent, corrupt, or unparseable == no data, not zero drift
+EOF
+)
+    LOCAL_VER="$CLI_VER"
+    [ "$LOCAL_VER" = "unknown" ] && LOCAL_VER="$PLUGIN_VER"
+
+    if [ "$CACHED" = "__NONE__" ]; then
+      # Cannot-verify is a finding, not a skip. Said once, then the refresh
+      # dispatched below means the next session has real data.
+      FINDINGS+=("$LABEL: npm latest for '$NPM_PKG' — cannot verify (no cached data yet; refresh dispatched)")
+      NEED_REFRESH+=("$NPM_PKG")
+    else
+      IFS=$'\x1f' read -r NPM_LATEST CACHE_AGE <<< "$CACHED"
+      IS_STALE=$(python3 -c "print(1 if $CACHE_AGE > ${NPM_TTL:-24} else 0)" 2>/dev/null || echo 0)
+      [ "$IS_STALE" = "1" ] && NEED_REFRESH+=("$NPM_PKG")
+      AGE_NOTE=""
+      [ "$IS_STALE" = "1" ] && AGE_NOTE=" (cache ${CACHE_AGE}h old — stale, refresh dispatched)"
+
+      if [ "$LOCAL_VER" = "unknown" ]; then
+        FINDINGS+=("$LABEL: npm latest is $NPM_LATEST but local version — cannot verify (no cli or marketplace version to compare)$AGE_NOTE")
+      elif [ "$LOCAL_VER" != "$NPM_LATEST" ]; then
+        FINDINGS+=("$LABEL: newer release published — local $LOCAL_VER vs npm latest $NPM_LATEST (npm i -g $NPM_PKG@$NPM_LATEST)$AGE_NOTE")
+      elif [ "$IS_STALE" = "1" ]; then
+        # Versions agree, but on data old enough that agreement proves little.
+        FINDINGS+=("$LABEL: npm check is stale — cache ${CACHE_AGE}h old, cannot confirm $LOCAL_VER is still current (refresh dispatched)")
+      fi
+    fi
+  fi
 done 3<<< "$WATCH"
+
+# ------------------------------------------------------- dispatch the refresh --
+# Detached and fully redirected: nohup + background + closed stdio means the
+# hook returns now and the network call outlives it. Never `wait`.
+if [ "${#NEED_REFRESH[@]}" -gt 0 ] && command -v npm >/dev/null 2>&1; then
+  # Re-invoke through `bash`, not `"$0"` directly: if the file is deployed
+  # without its exec bit the direct form dies with EACCES into /dev/null and
+  # the cache never refreshes again — a silent failure inside the thing built
+  # to catch silent failures. `bash` makes the refresh independent of file mode.
+  nohup bash "$0" --refresh-npm-cache "${NEED_REFRESH[@]}" >/dev/null 2>&1 </dev/null &
+  disown 2>/dev/null || true
+fi
 
 # --------------------------------------------------------------------- report --
 if [ "${#FINDINGS[@]}" -eq 0 ]; then

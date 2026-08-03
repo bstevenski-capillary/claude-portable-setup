@@ -44,11 +44,47 @@ To turn it on, copy the example to `~/.claude/hooks/rot-watch.json` and list the
 plugins/CLIs worth watching on this machine. A watchlist that exists but is
 empty **will** report itself — coverage was intended and isn't there.
 
-Smoke-test it (this is the "does a deliberate failure actually fail it" probe —
-worth doing once, since a hook that silently no-ops looks identical to a healthy
-one). **Both probes are required.** The empty-watchlist probe alone has a zero
-denominator: it only exercises the "nothing to check" path and never once parses
-a real watch entry, which is exactly how two parsing bugs shipped in this hook.
+### What it checks
+
+| Key | Compares | Network |
+|---|---|---|
+| `plugin` | installed **and** enabled in `settings.json` | no |
+| `marketplace` | git checkout age vs `stale_days` | no |
+| `cli` | on PATH, and `--version` vs the plugin version | no |
+| `npm` | installed version vs the registry's `latest` | **cached only** |
+
+The first three compare local things to each other, so a machine can be
+perfectly self-consistent and still be a year behind the registry. `npm` closes
+that gap — but it never blocks SessionStart. It reads
+`~/.claude/hooks/.rot-npm-cache.json`; when that is absent or older than
+`npm_ttl_hours` (default 24) it dispatches a **detached** refresh for the next
+session. Consequences worth knowing:
+
+- The first session after adding an `npm` key reports `cannot verify (no cached
+  data yet)`. The session after that reports real drift. That is the honest
+  sequence, not a bug.
+- Offline degrades to *stale data, explicitly labelled with its age* — never to
+  silence. A blocking `npm view` would instead hit the 10s hook timeout and be
+  killed mid-run, printing nothing, which is indistinguishable from all-clear.
+
+### Testing it
+
+The repo ships executable tests — run these against the working copy:
+
+```bash
+./tests/test-siren.sh
+```
+
+17 cases covering the abstention path, field-shift regressions, npm drift, and
+the no-network-on-the-hot-path contract. Every bug that has escaped this hook
+has a case there.
+
+The probes below are different and still worth running once: they exercise the
+**deployed** copy at `~/.claude/hooks/`, catching install-time problems (wrong
+path, missing exec bit, stale copy) that a test against the repo cannot see.
+**Both are required** — the empty-watchlist probe alone has a zero denominator:
+it only exercises the "nothing to check" path and never once parses a real watch
+entry, which is exactly how two parsing bugs shipped in this hook.
 
 **Probe 1 — the abstention path:**
 
@@ -81,6 +117,18 @@ three of `nope-1`, `nope-2`, `nope-3`. Two specific failures to watch for:
 
 A watched "CLI" that is actually an MCP stdio server is the common trigger for
 the first failure — probe 2 is what catches it.
+
+**Probe 3 — the deployed copy can refresh its own npm cache.** The refresh runs
+detached with its output closed, so a failure here is invisible by construction:
+
+```bash
+bash ~/.claude/hooks/tooling-rot-siren.sh --refresh-npm-cache npm
+cat ~/.claude/hooks/.rot-npm-cache.json
+```
+
+Expect a `npm` entry with a `latest` and a fresh `checked` timestamp. Nothing
+written means the deployed hook cannot refresh, and every later npm finding will
+be based on data frozen at install time.
 
 ## 4. Settings
 
