@@ -35,7 +35,8 @@ skipped file stays behind the bundle silently.
 | `home/hooks/clear-nudge.sh` | `~/.claude/hooks/` | PostToolUse hook: suggests `/clear` only when a commit/PR/merge/push has banked the work **and** context is already expensive |
 | `home/settings.template.json` | merge into `~/.claude/settings.json` | Model, effort, theme, notifications, empty-by-design permissions, plugin list, statusline + hook wiring |
 | `home/memory/` | `~/.claude/projects/<project>/memory/` | Seed memories: the visual-learner fact, and the two-file rules split (which file is a symlink and which is not) |
-| `tests/` | — | Executable regression tests for all three hooks (58 cases). `./tests/run-all.sh` |
+| `tools/check-drift.sh` | — | Read-only check that what's deployed still matches what's here. Exit 2 for "nothing installed" is distinct from exit 0 on purpose |
+| `tests/` | — | Executable regression tests for the three hooks and the drift check (88 cases). `./tests/run-all.sh` |
 
 ## The two ideas worth keeping even if you drop the rest
 
