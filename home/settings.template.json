@@ -1,0 +1,58 @@
+{
+  "_comment": "Template for ~/.claude/settings.json. Merge into an existing file rather than overwriting it — an existing settings.json may hold machine-specific permissions worth keeping. The permissions.allow list is deliberately EMPTY: allowlists should grow from real prompts on this machine, never be inherited (see EXCLUDED.md).",
+
+  "model": "claude-opus-5",
+  "effortLevel": "medium",
+  "theme": "dark",
+  "tui": "fullscreen",
+
+  "skillListingBudgetFraction": 0.02,
+
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
+
+  "permissions": {
+    "allow": [],
+    "additionalDirectories": []
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/tooling-rot-siren.sh",
+            "timeout": 10,
+            "statusMessage": "Tooling rot siren"
+          }
+        ]
+      }
+    ]
+  },
+
+  "skillOverrides": {
+    "_comment": "Turn OFF skills that duplicate a preferred one or that fire unwanted. Keeping the listing lean is what makes the right skill get picked. Populate this as skills prove noisy on this machine; the entries below are the categories worth watching, not a prescription.",
+    "frontend-design:frontend-design": "off"
+  },
+
+  "enabledPlugins": {
+    "_comment": "Public marketplace plugins carried over. Install with: claude plugin install <id>",
+    "claude-code-setup@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "agent-sdk-dev@claude-plugins-official": true
+  }
+}

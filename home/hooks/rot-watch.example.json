@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "Watchlist for tooling-rot-siren.sh. Copy to rot-watch.json and edit.",
+    "Each entry may set any subset of the four keys; omitted keys skip that check.",
+    "  plugin       plugin id as it appears in installed_plugins.json / enabledPlugins",
+    "  marketplace  directory name under ~/.claude/plugins/marketplaces (git freshness)",
+    "  cli          command name on PATH; its --version is compared to the plugin version",
+    "  stale_days   marketplace freshness threshold, default 14",
+    "An EMPTY watch array is treated as a finding, not a pass — that is deliberate."
+  ],
+  "watch": [
+    {
+      "plugin": "example-tool@example-marketplace",
+      "marketplace": "example-marketplace",
+      "cli": "example-tool",
+      "stale_days": 14
+    }
+  ]
+}
