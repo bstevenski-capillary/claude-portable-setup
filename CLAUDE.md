@@ -16,13 +16,20 @@ The shipped artifacts are three bash hooks, one skill, two rules files, a
 settings template, and memory seeds. Everything else (`README.md`, `INSTALL.md`,
 `EXCLUDED.md`) explains or installs those.
 
+`tools/` is the exception to "everything in this repo is cargo": it holds
+repo-local scripts that operate *on* an install rather than shipping into one.
+`check-drift.sh` lives there rather than in `home/hooks/` for a concrete reason
+— checking drift requires the bundle to diff against, so it can only run from a
+clone, which makes deploying it pointless.
+
 ## Commands
 
 ```bash
-./tests/run-all.sh          # every suite (58 cases across 3)
+./tests/run-all.sh          # every suite (88 cases across 4)
 ./tests/test-siren.sh       # or one suite at a time
 ./tests/test-nudge.sh
 ./tests/test-statusline.sh
+./tests/test-drift.sh
 ```
 
 There is no test framework and no single-case filter — a suite is a flat bash
@@ -32,12 +39,12 @@ temporary early `exit`.
 The four gates for this repo (no CI; run them by hand before a PR):
 
 ```bash
-bash -n home/hooks/*.sh tests/*.sh                    # syntax
-shellcheck home/hooks/*.sh                            # lint — clean at default severity
-shellcheck -S warning tests/*.sh                      # suites carry known SC2015 infos
-python3 -m json.tool home/settings.template.json      # JSON parses
+bash -n home/hooks/*.sh tools/*.sh tests/*.sh         # syntax
+shellcheck home/hooks/*.sh tools/*.sh                # lint — clean at default severity
+shellcheck -S warning tests/*.sh                     # suites carry known SC2015 infos
+python3 -m json.tool home/settings.template.json     # JSON parses
 python3 -m json.tool home/hooks/rot-watch.example.json
-./tests/run-all.sh                                    # test
+./tests/run-all.sh                                   # test
 ```
 
 The suites use `[ cond ] && ok ... || bad ...` deliberately (the assertion
@@ -50,21 +57,24 @@ The source of truth is `home/`, but the *running* config is `$HOME`. They
 diverge silently the moment a merged change isn't re-installed:
 
 ```bash
-diff home/CLAUDE.md ~/.claude/CLAUDE.md      # expect ONLY the line-6 @import path
-diff home/ai-rules/global.md ~/.config/ai-rules/global.md
-diff -r home/hooks ~/.claude/hooks \
-  --exclude='rot-watch.json' --exclude='.rot-npm-cache.json'
-diff -r home/skills/visual-decisions ~/.claude/skills/visual-decisions
+./tools/check-drift.sh                     # 0 clean · 1 drift · 2 abstention
+CHECK_ROOT=/tmp/fixture ./tools/check-drift.sh
 ```
 
 Run it after merging anything under `home/`, and before trusting a session's
-rules. The two exclusions are machine-local by design: `rot-watch.json` is this
-machine's watchlist (the repo ships only `.example.json`) and the npm cache is
-generated.
+rules. Read-only by contract — it reports, never repairs, because the size of
+the gap is the finding and a silent auto-fix erases it.
 
-Line 6 of `home/CLAUDE.md` is `@~/.config/ai-rules/global.md`; the deployed copy
-may legitimately carry an absolutized `@/Users/<you>/...` per INSTALL.md §1.
-That one line is expected drift — everything else is a finding.
+Exit **2 is not a failure and not a pass**: nothing of the bundle was installed
+at the root, so nothing was compared. Keeping it distinct from 0 is what stops a
+fresh clone reporting parity it never checked.
+
+Two differences are expected and the tool encodes both: the absolutized line-6
+`@import` (per INSTALL.md §1) and the machine-local `rot-watch.json` /
+`.rot-npm-cache.json`. The import handling canonicalizes the *target* rather
+than skipping the line — `tests/test-drift.sh` pins both halves, because a
+blanket line-6 skip would wave through an import rewritten to point elsewhere,
+which is the one edit that silently unloads every shared rule.
 
 **This has already happened once.** `home/CLAUDE.md` sat 7h ahead of the
 deployed copy after PRs #3 and #7: the live rules were missing the entire
@@ -86,6 +96,10 @@ variation on it, and changes that quietly weaken it are the main regression risk
 - A blank statusline, an unfired nudge, and a hook killed by timeout all look
   identical to "all clear" — which is why each hook has an explicit degraded
   output rather than a quiet path.
+- `check-drift.sh` spends a whole third exit code on "nothing was installed
+  here", counts deployed **files** rather than directories (an empty
+  `~/.claude/hooks/` is not an install), and prints its comparison count even on
+  a clean run.
 
 When editing a hook, ask what its *silent* state is indistinguishable from.
 
@@ -101,6 +115,8 @@ These are pinned by tests; breaking them is how the escaped defects escaped.
 | Nudge requires **evidence, not intent** | `clear-nudge.sh` | Keying on the command string announced commits that never happened — a grep, an echo, a doc example and a test fixture all contain `git commit`. It also discards the call if any part errored, because `a; b; c` reports one exit status |
 | Statusline uses the **last** usage record, not a sum | `statusline-context.sh` | Sidechain (subagent) turns spend real tokens but were never in the main window: they count toward `burn`, never toward the gauge |
 | Hooks derive every path from `$HOME` | all three | Suites run each case against a synthetic `$HOME`; a hardcoded path makes the test touch the real `~/.claude` |
+| The `@import` check canonicalizes the **target**, not the line | `check-drift.sh` | Skipping line 6 wholesale would pass an import rewritten to point elsewhere — the one edit that unloads every shared rule while the file still looks correct |
+| The drift check never writes | `check-drift.sh` | Auto-repair would destroy the evidence of how far behind the machine had drifted, which is the actual finding |
 
 ## Conventions specific to this repo
 
