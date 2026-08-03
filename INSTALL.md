@@ -277,9 +277,17 @@ one level up — and re-enabling one is a single flag, so bias toward off.
 
 The memory directory is per-project and named after the project path, so it
 can't be copied blind. Once a project directory exists at
-`~/.claude/projects/<slug>/memory/`, copy `home/memory/*` into it — or just let
-the agent re-derive the fact, since shared rule 1 in
-`~/.config/ai-rules/global.md` already states it.
+`~/.claude/projects/<slug>/memory/`, copy `home/memory/*` into it.
+
+Two seeds ship:
+
+- `visual-learner.md` — mostly redundant with shared rule 1, so skipping it is
+  fine; the agent re-derives it from `~/.config/ai-rules/global.md`.
+- `shared-agent-rules-symlink.md` — **not** redundant. It records which of the
+  two rules files is a real file and which is symlinked into Gemini/Codex/
+  Copilot. Nothing in the rules themselves says this, and getting it backwards
+  means a write to `~/.claude/CLAUDE.md` silently overwrites the shared file for
+  all four agents. Worth seeding on any machine where you'll edit the rules.
 
 ---
 

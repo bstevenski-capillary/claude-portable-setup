@@ -1,0 +1,22 @@
+# Tooling that runs *in* this repo but is not *part of* the bundle.
+#
+# .harness/ ships its own .gitignore for runtime artifacts, but never names the
+# directory itself, so it sat permanently untracked in `git status` — noise that
+# trains you to skim the one command that tells you what is uncommitted. It is
+# also private-org tooling (see EXCLUDED.md) and has no business in a public
+# bundle. Ignored here rather than in .harness/.gitignore because that file is
+# tool-owned and regenerated.
+#
+# (.remember/ needs no entry — it self-ignores with a `*` in its own .gitignore.)
+.harness/
+
+# Permission allowlists must never be inherited between machines. EXCLUDED.md
+# has the long version: an allowlist is a config file nobody thinks to audit, so
+# pasted payload data sits in it indefinitely. Grow it from real prompts on the
+# machine you are on. This repo exists to move a setup between laptops, which is
+# exactly the vector — so the ignore lives here, not only in a global excludes
+# file that a fresh clone elsewhere would not have.
+.claude/settings.local.json
+
+# macOS
+.DS_Store
