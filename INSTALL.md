@@ -46,7 +46,11 @@ empty **will** report itself — coverage was intended and isn't there.
 
 Smoke-test it (this is the "does a deliberate failure actually fail it" probe —
 worth doing once, since a hook that silently no-ops looks identical to a healthy
-one):
+one). **Both probes are required.** The empty-watchlist probe alone has a zero
+denominator: it only exercises the "nothing to check" path and never once parses
+a real watch entry, which is exactly how two parsing bugs shipped in this hook.
+
+**Probe 1 — the abstention path:**
 
 ```bash
 printf '{"watch":[]}' > /tmp/rot-empty.json && \
@@ -55,6 +59,28 @@ printf '{"watch":[]}' > /tmp/rot-empty.json && \
 
 Expect JSON on stdout containing `TOOLING-ROT SIREN — empty watchlist`. If you
 get nothing, the hook is not working — fix that before trusting it.
+
+**Probe 2 — the parsing path.** Three entries, each omitting a different key,
+plus one CLI that cannot exist:
+
+```bash
+printf '{"watch":[{"plugin":"ghost@nowhere","marketplace":"nowhere","cli":"nope-1"},{"marketplace":"nowhere","cli":"nope-2"},{"cli":"nope-3"}]}' \
+  > ~/.claude/hooks/rot-watch.json
+~/.claude/hooks/tooling-rot-siren.sh; rm ~/.claude/hooks/rot-watch.json
+```
+
+Expect **`across 6 check(s)`** and a `CLI 'nope-N' not on PATH` finding for all
+three of `nope-1`, `nope-2`, `nope-3`. Two specific failures to watch for:
+
+- **Fewer than 6 checks, or a missing `nope-3`** — entries are being dropped.
+  Something in the loop body is consuming the watchlist on stdin (an MCP stdio
+  server that ignores `--version` will do this). The loop must read on FD 3.
+- **Findings naming the wrong field** (e.g. a marketplace check against
+  `nope-2`, or `CLI '14' not on PATH`) — fields are shifting left because the
+  delimiter is IFS whitespace. It must be `\x1f`, not a tab.
+
+A watched "CLI" that is actually an MCP stdio server is the common trigger for
+the first failure — probe 2 is what catches it.
 
 ## 4. Settings
 

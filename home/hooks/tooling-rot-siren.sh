@@ -60,7 +60,11 @@ except Exception as e:
     print("__PARSE_ERROR__%s" % e)
     sys.exit(0)
 for w in cfg.get("watch", []):
-    print("\t".join([
+    # \x1f (unit separator), NOT tab: tab is IFS whitespace, so bash's `read`
+    # collapses runs of it and strips leading ones — which silently shifts every
+    # field left whenever an entry omits a key. A non-whitespace delimiter makes
+    # empty fields survive intact.
+    print("\x1f".join([
         w.get("plugin", ""), w.get("marketplace", ""),
         w.get("cli", ""), str(w.get("stale_days", 14)),
     ]))
@@ -86,7 +90,10 @@ if [ -z "$WATCH" ]; then
 fi
 
 # ----------------------------------------------------------------- the checks --
-while IFS=$'\t' read -r PLUGIN MKT_NAME CLI STALE_DAYS; do
+# Read on FD 3, not stdin: children spawned in the loop body inherit stdin and
+# can consume it. Keeping the watchlist on its own descriptor makes the loop
+# structurally immune to that, regardless of what a watched command does.
+while IFS=$'\x1f' read -r -u 3 PLUGIN MKT_NAME CLI STALE_DAYS; do
   [ -z "$PLUGIN$MKT_NAME$CLI" ] && continue
   LABEL="${PLUGIN:-${CLI:-$MKT_NAME}}"
   MKT="$CLAUDE_DIR/plugins/marketplaces/$MKT_NAME"
@@ -128,7 +135,11 @@ import json;print(json.load(open('$MKT/.claude-plugin/plugin.json'))['version'])
     CHECKS_RUN=$((CHECKS_RUN + 1))
     if command -v "$CLI" >/dev/null 2>&1; then
       # Strip ANSI: many CLIs print a decorated banner for --version.
-      CLI_VER=$("$CLI" --version 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g' \
+      # </dev/null is mandatory: some watched "CLIs" are MCP stdio servers that
+      # do not recognize --version and instead start up and read stdin to EOF.
+      # Without this they drain the watchlist and every later entry is silently
+      # skipped — a truncated denominator inside the denominator checker.
+      CLI_VER=$("$CLI" --version 2>/dev/null </dev/null | sed $'s/\x1b\\[[0-9;]*m//g' \
         | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
       CLI_VER=${CLI_VER:-unknown}
       if [ "$PLUGIN_VER" != "unknown" ] && [ "$CLI_VER" != "unknown" ] \
@@ -139,7 +150,7 @@ import json;print(json.load(open('$MKT/.claude-plugin/plugin.json'))['version'])
       FINDINGS+=("$LABEL: CLI '$CLI' not on PATH")
     fi
   fi
-done <<< "$WATCH"
+done 3<<< "$WATCH"
 
 # --------------------------------------------------------------------- report --
 if [ "${#FINDINGS[@]}" -eq 0 ]; then
