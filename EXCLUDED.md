@@ -20,8 +20,10 @@ identifying:
 
 - The canary session siren → `hooks/tooling-rot-siren.sh`, generalized to any
   plugin/CLI pair and config-driven.
-- The harness/canary skill-priority table → rule 8, restated as "size a skill by
-  its blast radius" rather than a list of internal skill names.
+- The harness/canary skill-priority table → shared rule 10, restated as "size a
+  skill by its blast radius" rather than a list of internal skill names, plus a
+  generic "prefer the specific skill over the general one" in the Claude-side
+  `CLAUDE.md`. Name the actual skills there once they're installed on the target.
 - The four-gate check, worktree isolation, and never-`--no-verify` conventions →
   kept verbatim; they're generic engineering practice.
 
@@ -65,9 +67,9 @@ what actually proves noisy in practice.
 
 ## Note on one rule that changed in transit
 
-The source `CLAUDE.md` states "distrust green until vetted" as a blanket hard
+The source `CLAUDE.md` stated "distrust green until vetted" as a blanket hard
 rule. That was a directive written during a specific remediation, and the
-tooling it was aimed at has since been fixed. It's rescoped in this bundle
-(rule 2) to the part that stays true regardless: a zero denominator is an
-abstention, and "cannot verify" is a finding. **The source machine's `CLAUDE.md`
-still has the blanket version** — worth rescoping there too.
+tooling it was aimed at has since been fixed. It is rescoped here (shared rule 2)
+to the part that stays true regardless: a zero denominator is an abstention, and
+"cannot verify" is a finding. The source machine has since adopted the same
+rescoped wording, so the two no longer disagree.

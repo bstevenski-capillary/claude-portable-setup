@@ -1,7 +1,8 @@
 # Claude working-setup bundle — portable
 
-A carry-over of the agent working setup from another machine: global working
-rules, one personal skill, a session-start tooling-rot hook, and a settings
+A carry-over of the agent working setup from another machine: the shared
+agent-agnostic working rules, the Claude-specific mechanics that sit on top of
+them, one personal skill, a session-start tooling-rot hook, and a settings
 template. Everything here is **generic craft** — no employer, client, private
 repo, or internal tooling is referenced. See [EXCLUDED.md](EXCLUDED.md) for what
 was deliberately left behind and why.
@@ -13,14 +14,15 @@ Copy this directory to the new machine, open Claude Code in it, and say:
 > Read README.md and INSTALL.md in this directory and set up this machine.
 
 The agent will do the install. Or run the steps yourself from
-[INSTALL.md](INSTALL.md) — there are only four, and none of them overwrite an
+[INSTALL.md](INSTALL.md) — there are five, and none of them overwrite an
 existing config without asking.
 
 ## What's in it
 
 | File | Goes to | What it does |
 |---|---|---|
-| `home/CLAUDE.md` | `~/.claude/CLAUDE.md` | The working rules — visual-first decisions, denominator checks, trail markers, PR-review verdicts, repo conventions, standard workflow |
+| `home/ai-rules/global.md` | `~/.config/ai-rules/global.md` | The working rules, agent-agnostic — visual-first decisions, denominator checks, TDD, trail markers, PR-review verdicts, repo conventions, standard workflow. Every agent on the machine reads this one file |
+| `home/CLAUDE.md` | `~/.claude/CLAUDE.md` | Claude Code-specific mechanics only — the visual level dial, the siren, skill selection, worktree isolation, permission hygiene. Opens by `@import`ing the shared file above |
 | `home/skills/visual-decisions/` | `~/.claude/skills/` | Personal skill: render a visual before any non-trivial decision, with a latency/cost level dial |
 | `home/hooks/tooling-rot-siren.sh` | `~/.claude/hooks/` | SessionStart hook: catches degraded local tooling (missing/disabled plugin, stale marketplace checkout, CLI-vs-plugin version skew) before work starts |
 | `home/hooks/rot-watch.example.json` | `~/.claude/hooks/` | Watchlist config for the siren. No config = silent. |
