@@ -364,6 +364,10 @@ it by hand against §5 instead.
       item most likely to fail, and the one nothing else will tell you about. An
       exit of 2 on a machine you believe you installed to means the copies never
       landed where the tool looks
+- [ ] Read the `not compared:` line that check prints — `settings.json` (§5) and
+      the `memory/` seeds (§6) are outside its reach by design, so the two items
+      below are checked by *you*, not by it. Its green covers 4 of the 6 things
+      this file deploys
 - [ ] `~/.claude/settings.json` parses (`python3 -m json.tool ~/.claude/settings.json`)
 - [ ] No `_comment` keys survived into the live settings file
 - [ ] The agent renders a visual before the next decision it puts to you —

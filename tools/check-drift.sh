@@ -95,6 +95,20 @@ compare_dir() {
     if ! diff -q "$f" "$dst/$rel" >/dev/null 2>&1; then
       FINDINGS+=("drift — $label/$rel differs from the bundle copy")
     fi
+
+    # Mode, not just content. A hook without +x does not run, and Claude Code
+    # says nothing when one fails to execute — the session just loses that
+    # hook's coverage, which is indistinguishable from the hook running and
+    # finding nothing. The diff above cannot see this: a byte-identical hook
+    # with the wrong permissions is content-clean and functionally absent.
+    # Scoped to *.sh because rot-watch.example.json ships 0644 on purpose.
+    case "$rel" in
+      *.sh)
+        CHECKS_RUN=$((CHECKS_RUN + 1))
+        [ -x "$dst/$rel" ] || FINDINGS+=(
+          "not executable — $label/$rel is installed but lacks +x, so it never runs (chmod +x)")
+        ;;
+    esac
   done < <(find "$src" -type f 2>/dev/null | sort)
 
   [ -d "$dst" ] || return
@@ -106,6 +120,26 @@ compare_dir() {
     [ -f "$src/$rel" ] || \
       FINDINGS+=("orphan — $label/$rel is installed but no longer in the bundle")
   done < <(find "$dst" -type f 2>/dev/null | sort)
+}
+
+# What this check deliberately does NOT reach. Both are real parts of an
+# install (INSTALL.md §5 and §6) and both are excluded on purpose:
+#
+#   settings.json  — the template ships `permissions.allow: []` while the live
+#                    file carries entries grown from real prompts, so a diff
+#                    would be red on every correctly-configured machine.
+#   memory/        — seeds, not a manifest. The deployed directory is expected
+#                    to accumulate memories the bundle has never heard of.
+#
+# Excluding them is right; letting "in sync" imply otherwise is not. This check
+# covers 4 of the 6 things INSTALL.md deploys, and a green that reads as total
+# coverage is the same overstatement this bundle exists to catch — so the
+# uncovered targets are named on every non-abstaining run, pass or fail.
+print_uncovered() {
+  printf '  %snot compared: settings.json (INSTALL.md §5), memory/ seeds (§6)%s\n' \
+    "$C_DIM" "$C_OFF"
+  printf '  %s— both diverge from the bundle by design, so drift there is invisible here%s\n' \
+    "$C_DIM" "$C_OFF"
 }
 
 compare_file "$BUNDLE/home/CLAUDE.md" \
@@ -131,6 +165,7 @@ fi
 if [ "${#FINDINGS[@]}" -eq 0 ]; then
   printf '%s⇄ deployed config in sync with the bundle%s %s(%d check(s))%s\n' \
     "$C_GOLD" "$C_OFF" "$C_DIM" "$CHECKS_RUN" "$C_OFF"
+  print_uncovered
   exit 0
 fi
 
@@ -139,6 +174,8 @@ printf '%s⇄ DEPLOY DRIFT — %d finding(s) across %d check(s)%s\n' \
 for f in "${FINDINGS[@]}"; do
   printf '  %s•%s %s\n' "$C_RED" "$C_OFF" "$f"
 done
+printf '\n'
+print_uncovered
 printf '\n  %sthe bundle at %s is the source of truth; re-copy, then re-apply%s\n' \
   "$C_DIM" "$BUNDLE" "$C_OFF"
 printf '  %sthe absolutized @import from INSTALL.md §1 if you use it%s\n' \
