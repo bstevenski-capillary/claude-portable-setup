@@ -36,7 +36,7 @@ skipped file stays behind the bundle silently.
 | `home/settings.template.json` | merge into `~/.claude/settings.json` | Model, effort, theme, notifications, empty-by-design permissions, plugin list, statusline + hook wiring |
 | `home/memory/` | `~/.claude/projects/<project>/memory/` | Seed memories: the visual-learner fact, and the two-file rules split (which file is a symlink and which is not) |
 | `tools/check-drift.sh` | — | Read-only check that what's deployed still matches what's here. Exit 2 for "nothing installed" is distinct from exit 0 on purpose |
-| `tests/` | — | Executable regression tests for the three hooks and the drift check (88 cases). `./tests/run-all.sh` |
+| `tests/` | — | Executable regression tests for the three hooks and the drift check (99 cases). `./tests/run-all.sh` |
 
 ## The two ideas worth keeping even if you drop the rest
 

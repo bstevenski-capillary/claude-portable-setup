@@ -25,7 +25,7 @@ clone, which makes deploying it pointless.
 ## Commands
 
 ```bash
-./tests/run-all.sh          # every suite (88 cases across 4)
+./tests/run-all.sh          # every suite (99 cases across 4)
 ./tests/test-siren.sh       # or one suite at a time
 ./tests/test-nudge.sh
 ./tests/test-statusline.sh
@@ -76,6 +76,22 @@ than skipping the line — `tests/test-drift.sh` pins both halves, because a
 blanket line-6 skip would wave through an import rewritten to point elsewhere,
 which is the one edit that silently unloads every shared rule.
 
+**Its green is partial, and says so.** The check reaches 4 of the 6 things
+INSTALL.md deploys. `settings.json` (§5) and the `memory/` seeds (§6) are
+excluded deliberately — the template ships `permissions.allow: []` while the
+live file carries entries grown from real prompts, and memory seeds are seeds
+that accumulate — so diffing either would be red on every correct machine. The
+exclusion is right; an unqualified "in sync" implying total coverage was not,
+so both uncovered targets are named on every non-abstaining run, pass *and*
+fail. Printing the caveat only on green would imply a red run's findings were
+exhaustive.
+
+It also compares **mode, not just content**: a deployed `*.sh` without `+x`
+never runs, and Claude Code reports nothing when a hook fails to execute — the
+session silently loses that hook's coverage. A byte-identical hook with the
+wrong permissions is content-clean and functionally absent, which every check
+passed before this one existed.
+
 **This has already happened once.** `home/CLAUDE.md` sat 7h ahead of the
 deployed copy after PRs #3 and #7: the live rules were missing the entire
 context-instruments section and still named private-marketplace skills that
@@ -117,6 +133,8 @@ These are pinned by tests; breaking them is how the escaped defects escaped.
 | Hooks derive every path from `$HOME` | all three | Suites run each case against a synthetic `$HOME`; a hardcoded path makes the test touch the real `~/.claude` |
 | The `@import` check canonicalizes the **target**, not the line | `check-drift.sh` | Skipping line 6 wholesale would pass an import rewritten to point elsewhere — the one edit that unloads every shared rule while the file still looks correct |
 | The drift check never writes | `check-drift.sh` | Auto-repair would destroy the evidence of how far behind the machine had drifted, which is the actual finding |
+| The uncovered targets print on **both** the pass and fail paths | `check-drift.sh` | `settings.json` and `memory/` are never compared; a bare "in sync" claims coverage the check does not have, and disclosing only on green would imply a red run's findings were exhaustive |
+| Deployed `*.sh` are checked for `+x`, scoped to `.sh` | `check-drift.sh` | A hook without the exec bit never runs and Claude Code says nothing, so it is indistinguishable from a hook that ran clean. Scoped because `rot-watch.example.json` ships 0644 on purpose and demanding `+x` on data files would make a correct install permanently red |
 
 ## Conventions specific to this repo
 

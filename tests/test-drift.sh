@@ -252,6 +252,68 @@ case "$OUT" in *"in sync"*) ok "no CHECK_ROOT → falls back to \$HOME";; \
   *) bad "no CHECK_ROOT → falls back to \$HOME" "clean run against \$HOME" "$OUT";; esac
 teardown
 
+# ── 18. the exec bit is part of an install, not a detail ─────────────────────
+# A hook without +x does not run. Claude Code reports nothing when a hook fails
+# to execute, so the session simply loses that hook's coverage in silence —
+# indistinguishable from a hook that ran and found nothing. This bundle has
+# already shipped one exec-bit bug (the siren's detached refresh), and the
+# content comparison above cannot see the mode at all: a byte-identical hook
+# with the wrong permissions passed every check before this one existed.
+setup
+install_all
+chmod -x "$ROOT/.claude/hooks/tooling-rot-siren.sh"
+OUT=$(run_drift); RC=$(rc_of)
+assert_rc 1 "$RC" "deployed hook lost +x → caught"
+assert_has "tooling-rot-siren.sh" "$OUT" "  finding names the hook"
+assert_has "executable" "$OUT" "  and says it is a permission problem, not content drift"
+teardown
+
+# ── 19. ...and a correctly executable install stays quiet ────────────────────
+# The twin of 18. `cp` preserves the mode, so a faithful install is already
+# executable — this pins that the new check does not fire on it, because a
+# check that flags every correct machine gets switched off.
+setup
+install_all
+OUT=$(run_drift); RC=$(rc_of)
+assert_rc 0 "$RC" "faithful install → exec bits satisfy the check"
+assert_not "executable" "$OUT" "  no permission finding on a correct install"
+teardown
+
+# ── 20. a non-script needs no exec bit ───────────────────────────────────────
+# rot-watch.example.json ships 0644 on purpose. Demanding +x on data files
+# would make a correct install permanently red.
+setup
+install_all
+OUT=$(run_drift); RC=$(rc_of)
+assert_rc 0 "$RC" "0644 data file in hooks/ → not a permission finding"
+assert_not "rot-watch.example.json" "$OUT" "  and the .json is never named"
+teardown
+
+# ── 21. THE HONEST DENOMINATOR: a green must not overstate its reach ─────────
+# check-drift.sh compares 4 of the 6 things INSTALL.md deploys. settings.json
+# (§5) and the memory seeds (§6) are deliberately NOT compared — the template
+# ships `permissions.allow: []` while the live file carries real entries, and
+# memory seeds are seeds that grow — so diffing either would emit permanent
+# false drift. That is the right call, but an unqualified "in sync" states more
+# than was checked, which is this repo's own thesis pointed back at it.
+setup
+install_all
+OUT=$(run_drift)
+assert_has "not compared" "$OUT" "clean run → discloses what it did NOT check"
+assert_has "settings.json" "$OUT" "  names settings.json as uncovered"
+assert_has "memory" "$OUT" "  names the memory seeds as uncovered"
+teardown
+
+# ── 22. the disclosure survives the drift path too ───────────────────────────
+# A red run is still a partial-coverage run. Printing the caveat only on green
+# would imply the findings list was exhaustive.
+setup
+install_all
+printf '\nstray edit\n' >> "$ROOT/.config/ai-rules/global.md"
+OUT=$(run_drift)
+assert_has "not compared" "$OUT" "drift run → discloses its uncovered targets too"
+teardown
+
 # ── tally ────────────────────────────────────────────────────────────────────
 printf '\n'
 if [ "$FAIL" -eq 0 ]; then
