@@ -1,19 +1,30 @@
 {
   "_comment": [
     "Watchlist for tooling-rot-siren.sh. Copy to rot-watch.json and edit.",
-    "Each entry may set any subset of the four keys; omitted keys skip that check.",
-    "  plugin       plugin id as it appears in installed_plugins.json / enabledPlugins",
-    "  marketplace  directory name under ~/.claude/plugins/marketplaces (git freshness)",
-    "  cli          command name on PATH; its --version is compared to the plugin version",
-    "  stale_days   marketplace freshness threshold, default 14",
-    "An EMPTY watch array is treated as a finding, not a pass — that is deliberate."
+    "Each entry may set any subset of the keys; omitted keys skip that check.",
+    "  plugin         plugin id as it appears in installed_plugins.json / enabledPlugins",
+    "  marketplace    directory name under ~/.claude/plugins/marketplaces (git freshness)",
+    "  cli            command name on PATH; its --version is compared to the plugin version",
+    "  stale_days     marketplace freshness threshold, default 14",
+    "  npm            npm package name; cached registry 'latest' vs the installed version",
+    "  npm_ttl_hours  how old the cached registry answer may get, default 24",
+    "An EMPTY watch array is treated as a finding, not a pass — that is deliberate.",
+    "",
+    "The npm check never touches the network on the SessionStart path. It reads",
+    "~/.claude/hooks/.rot-npm-cache.json and, when that is missing or older than",
+    "npm_ttl_hours, dispatches a DETACHED refresh for the next session. So the",
+    "first session after adding an 'npm' key reports cannot-verify, and the one",
+    "after that reports real drift. Offline degrades to stale-but-labelled,",
+    "never to silence."
   ],
   "watch": [
     {
       "plugin": "example-tool@example-marketplace",
       "marketplace": "example-marketplace",
       "cli": "example-tool",
-      "stale_days": 14
+      "stale_days": 14,
+      "npm": "example-tool-cli",
+      "npm_ttl_hours": 24
     }
   ]
 }
