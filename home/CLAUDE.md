@@ -220,6 +220,25 @@ branches in place. Spawned agents that mutate files should run with
 - **Four-gate check before "done" or opening a PR:** build + typecheck + lint +
   test must all pass. Treat `typecheck` as a first-class gate distinct from lint.
 
+## Permission hygiene
+
+- **Never write files with a Bash heredoc** (`cat > f <<'EOF' … EOF`) — use the
+  Write/Edit tools. The permission layer splits a compound Bash call into
+  per-line sub-commands, so a heredoc body becomes one approval prompt *per line
+  of file content*, and approving them writes each line into `permissions.allow`
+  as a permanent rule. On the machine this bundle came from that mechanism
+  accumulated 77 junk entries — JSON fragments, `Bash({)`, `Bash(JSONEOF)` — plus
+  client payload values that had no business in a config file. Same reasoning
+  for multi-line `printf`/`echo` file writes.
+- **Allowlist entries should be wildcard verbs, not one-shot invocations.**
+  `Bash(npm run:*)` earns its place; a fully-specified one-off command never
+  matches twice and just buries the real rules. The wildcard syntax is `:*` — a
+  trailing ` *` does not match.
+- **Nothing that pushes or rewrites remotes goes in the allowlist** —
+  `git push`, `git remote set-url`, and publish commands should keep prompting.
+- **Treat the allowlist as data that leaks.** It's a config file nobody thinks
+  to audit, so pasted payloads sit there indefinitely.
+
 ## Docs
 
 - **`AGENTS.md` is the canonical knowledge map** — read it first for
