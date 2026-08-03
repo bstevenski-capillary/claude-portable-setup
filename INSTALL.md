@@ -8,15 +8,46 @@ Paths below assume the bundle is the current directory.
 
 ---
 
-## 1. Global working rules
+## 1. Global working rules — two files, not one
 
-```bash
-mkdir -p ~/.claude
+The rules are split by **audience**, not by topic:
+
+```
+~/.config/ai-rules/global.md   ← agent-agnostic. Claude, Gemini, Codex, Copilot
+                                  all read this same file.
+~/.claude/CLAUDE.md            ← Claude Code only: skills, hooks, settings keys,
+                                  tool behavior. Starts with an @import of the
+                                  shared file.
 ```
 
+```bash
+mkdir -p ~/.config/ai-rules ~/.claude
+```
+
+- If `~/.config/ai-rules/global.md` **does not exist** → copy
+  `home/ai-rules/global.md` there.
 - If `~/.claude/CLAUDE.md` **does not exist** → copy `home/CLAUDE.md` there.
-- If it **does exist** → show the user a diff and ask whether to merge, replace,
-  or skip. Do not silently clobber it.
+- If either **does exist** → show the user a diff and ask whether to merge,
+  replace, or skip. Do not silently clobber.
+
+Point the other agents at the shared file too — each reads its own filename, so
+a symlink is the cheapest way to keep them from drifting apart:
+
+```bash
+ln -s ~/.config/ai-rules/global.md ~/.gemini/GEMINI.md   # and AGENTS.md, etc.
+```
+
+**Why split at all.** The single-file version drifted: a rule got improved while
+answering a Claude question, and the copy the other three agents read stayed
+wrong. One file with one owner is the fix. The cost is that every rule now has
+to earn its place on one side of the line — anything naming a skill, hook, or
+`settings.json` key belongs in `CLAUDE.md`, everything else in `global.md`.
+
+**Verify the import resolved.** `CLAUDE.md` line 6 is
+`@~/.config/ai-rules/global.md`; a failed import is silent, and silence here
+looks exactly like a machine with no rules. In a new session, ask the agent to
+state rule 3 — it should answer **"always do TDD"**, which only exists in the
+shared file. If it can't, replace the `~` with the absolute home path and retry.
 
 ## 2. The visual-decisions skill
 
@@ -158,13 +189,16 @@ skill listing makes the right skill harder to pick, which is the problem
 The memory directory is per-project and named after the project path, so it
 can't be copied blind. Once a project directory exists at
 `~/.claude/projects/<slug>/memory/`, copy `home/memory/*` into it — or just let
-the agent re-derive the fact, since `CLAUDE.md` rule 1 already states it.
+the agent re-derive the fact, since shared rule 1 in
+`~/.config/ai-rules/global.md` already states it.
 
 ---
 
 ## Verify
 
 - [ ] A new session lists `visual-decisions` among available skills
+- [ ] The agent can state rule 3 as "always do TDD" — proves the `@import` of
+      `~/.config/ai-rules/global.md` resolved rather than failing silently
 - [ ] The siren smoke-test above printed the empty-watchlist finding
 - [ ] `~/.claude/settings.json` parses (`python3 -m json.tool ~/.claude/settings.json`)
 - [ ] No `_comment` keys survived into the live settings file
