@@ -14,8 +14,13 @@ Copy this directory to the new machine, open Claude Code in it, and say:
 > Read README.md and INSTALL.md in this directory and set up this machine.
 
 The agent will do the install. Or run the steps yourself from
-[INSTALL.md](INSTALL.md) — there are five, and none of them overwrite an
-existing config without asking.
+[INSTALL.md](INSTALL.md) — five required, one optional, and none of them
+overwrite an existing config without asking.
+
+Already have this installed and are updating it? Skip to
+[INSTALL.md §7](INSTALL.md#7-re-installing-over-a-setup-that-already-exists) —
+"don't overwrite without asking" means the honest answer is often *skip*, and a
+skipped file stays behind the bundle silently.
 
 ## What's in it
 

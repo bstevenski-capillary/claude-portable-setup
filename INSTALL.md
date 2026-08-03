@@ -1,6 +1,7 @@
 # Install
 
-For the agent running this: work through the four steps below in order. **Never
+For the agent running this: work through §§1–5 below in order, then §6 (optional)
+and §7 (re-installs only, but read it before trusting an existing setup). **Never
 overwrite an existing file without showing the user a diff and getting a yes** —
 this machine may already have a config worth keeping.
 
@@ -291,6 +292,48 @@ Two seeds ship:
 
 ---
 
+## 7. Re-installing over a setup that already exists
+
+Everything above is written for a machine with nothing on it. The second install
+onto the *same* machine has the opposite failure mode: step 1 tells you not to
+overwrite an existing file without asking, so the honest answer to that prompt is
+often "skip" — and the skipped file then stays behind the bundle forever.
+
+That is not hypothetical. `home/CLAUDE.md` once sat 7 hours ahead of the
+deployed `~/.claude/CLAUDE.md`: the live rules were missing an entire section
+describing two hooks that *were* installed and running, and still named
+private-marketplace skills the bundle exists to have removed. Nothing surfaced
+it, because a stale rules file loads, parses, and reads as authoritative exactly
+like a current one.
+
+So before trusting an existing install — and after merging anything under
+`home/` — diff the bundle against what is actually deployed:
+
+```bash
+diff home/CLAUDE.md ~/.claude/CLAUDE.md      # expect ONLY the line-6 @import path
+diff home/ai-rules/global.md ~/.config/ai-rules/global.md
+diff -r home/hooks ~/.claude/hooks \
+  --exclude='rot-watch.json' --exclude='.rot-npm-cache.json'
+diff -r home/skills/visual-decisions ~/.claude/skills/visual-decisions
+```
+
+Two differences are expected rather than findings:
+
+- **Line 6 of `CLAUDE.md`** may carry an absolutized `@/Users/<you>/...` import
+  (see §1) instead of the `~` form the bundle ships.
+- **The two exclusions are machine-local by design** — `rot-watch.json` is this
+  machine's watchlist, of which the repo ships only `.example.json`, and
+  `.rot-npm-cache.json` is generated.
+
+Anything else is drift. Re-copy the file, then re-apply the two expected
+differences above.
+
+`~/.claude/settings.json` is deliberately **not** in that list: it is a merge
+target, not a copy target, so it is expected to diverge from the template. Check
+it by hand against §5 instead.
+
+---
+
 ## Verify
 
 - [ ] A new session lists `visual-decisions` among available skills
@@ -304,6 +347,9 @@ Two seeds ship:
 - [ ] Every watched `cli` in `rot-watch.json` either names an `npm` package or
       declares `"npm_exempt": true` — otherwise the siren is reporting on a
       watchlist it only half-checks
+- [ ] The four `diff`s in §7 are clean, bar the two expected differences — on a
+      **re-install** this is the item most likely to fail, and the one nothing
+      else will tell you about
 - [ ] `~/.claude/settings.json` parses (`python3 -m json.tool ~/.claude/settings.json`)
 - [ ] No `_comment` keys survived into the live settings file
 - [ ] The agent renders a visual before the next decision it puts to you —
