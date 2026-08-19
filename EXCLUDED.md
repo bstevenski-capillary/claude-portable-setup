@@ -63,11 +63,39 @@ internal skills that won't exist on the target, so copying the list wholesale
 would leave dead keys. Only `frontend-design` carried over. Repopulate this from
 what actually proves noisy in practice.
 
-## Note on one rule that changed in transit
+## Note on one rule that changed in transit — now resolved
 
-The source `CLAUDE.md` states "distrust green until vetted" as a blanket hard
-rule. That was a directive written during a specific remediation, and the
-tooling it was aimed at has since been fixed. It's rescoped in this bundle
-(rule 2) to the part that stays true regardless: a zero denominator is an
-abstention, and "cannot verify" is a finding. **The source machine's `CLAUDE.md`
-still has the blanket version** — worth rescoping there too.
+The source `CLAUDE.md` stated "distrust green until vetted" as a blanket hard
+rule. That was a directive written during a specific remediation, and the tooling
+it was aimed at has since been fixed. It was rescoped in this bundle (rule 2) to
+the part that stays true regardless: a zero denominator is an abstention, and
+"cannot verify" is a finding.
+
+**Resolved on the source machine too.** Its `CLAUDE.md` now carries the rescoped
+wording, so the two agree on this rule. (The source file is 17 minutes newer than
+this bundle, which is why the note above read as outstanding for a while after it
+had actually been fixed.)
+
+## Second pass — generic craft that came over later
+
+A later review compared the two files again and moved three things across. All
+are generic; none names an employer, client, repo, registry, or internal tool.
+
+| Added | Was excluded because | Kept how |
+|---|---|---|
+| Rule 9 — prefer first-party skills | The original was a table of internal skill names | Restated as a routing *habit*; the name mapping stays in private config |
+| Rule 10 — issue tracker is the status source of truth, and fetch cadence | Original named internal repos and ticket conventions | Restated without them; the fetch-often reasoning is generic to fast-moving teams |
+| Private registries & secrets (Repo Conventions) | Original named a private package scope and a specific password manager | Restated as "a scoped read token" and "a password manager" |
+
+Note that rule 9 is deliberately *not* the same as rule 8. The first pass folded
+the internal skill-priority table into rule 8 ("size a skill by blast radius"),
+but those answer different questions — rule 8 is where a skill I write should
+live, rule 9 is which existing skill to invoke. Only the latter was actually
+missing.
+
+## Still not portable
+
+Everything in the tables above the line stays excluded, for the reasons given.
+Re-adding any of it would break this bundle's one invariant: it installs on a
+personal machine under a personal account, and references nothing that needs a
+corporate network or an SSO-authorized token to resolve.

@@ -154,18 +154,43 @@ who benefits:
 | More than one team | Shared internal plugin/marketplace |
 | Beyond the org | Public plugin |
 
-## 9. Teachable moments
+## 9. Prefer first-party skills over third-party lookalikes
+
+When several skills could serve the same task, invoke the one my own org
+maintains — not whichever generic or third-party equivalent happens to appear
+first in the list. The first-party one encodes our conventions, gates, and
+review expectations; a lookalike quietly substitutes someone else's.
+
+This is a *routing* rule, and distinct from rule 8, which is about where a skill
+I write should live. Keep the concrete mapping (task → preferred skill) in the
+private config on each machine, since the useful version of that table names
+internal tooling. The portable half is the habit: check for a first-party skill
+before reaching for a generic one, and only fall back when there genuinely
+isn't one.
+
+## 10. The issue tracker is the status source of truth
+
+On small, fast-moving, heavily-AI-leveraged teams, the tracker — not chat, not a
+doc, not a session transcript — is where status lives. So: file what you find,
+and read the tracker before assuming something is unknown or unowned.
+
+Practical consequence: **fetch remote often.** At minimum at task start, before
+branching, and before pushing — plus periodically during long-running work,
+because on these teams `main` moves under you within a single session. A stale
+base is how two agents produce conflicting versions of the same fix.
+
+## 11. Teachable moments
 
 Give a human-readable summary of changes and *why*, plus expected outcomes
 (faster runtimes, more stability, false-fail vs. real bug in the system under
 test). I'd rather understand the change than just receive it.
 
-## 10. Keep an eye out for new tooling
+## 12. Keep an eye out for new tooling
 
 Fast-growing frameworks, new MCP servers, new skills — worth adopting. But don't
 swap tooling mid-task without flagging it first.
 
-## 11. HAVE FUN
+## 13. HAVE FUN
 
 Sneak in geeky fun where it fits (custom test reporters, themed output). If
 something gets wider adoption, polish it to whatever styleguide applies.
@@ -182,6 +207,12 @@ Defaults for when a repo is silent. **Repo-local config always wins.**
   (or asdf/mise) before installing or building. Never assume the global version.
 - **Package manager:** respect the repo's lockfile — pnpm, yarn, and npm are all
   in play. Never migrate a repo between package managers.
+- **Private registries & secrets:** a repo that installs from a private registry
+  needs a scoped read token in the environment before install — expect it to be
+  the first thing that breaks on a fresh clone, and check for an `.npmrc` /
+  equivalent rather than guessing. Runtime secrets come from a password manager,
+  never from the repo; `.env` stays gitignored, and a missing one is a setup step,
+  not a reason to inline a value.
 
 ## Commits & branches
 
