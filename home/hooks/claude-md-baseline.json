@@ -1,0 +1,14 @@
+{
+  "_comment": [
+    "Fingerprints of the two CLAUDE.md files at the last reconciliation.",
+    "Restamp BOTH values whenever you finish comparing them — `git log` on this",
+    "file is then the reconciliation history. The files are deliberately",
+    "different documents (see EXCLUDED.md); these hashes are what make drift",
+    "detectable without diffing two things that are supposed to disagree.",
+    "source_sha256 = ~/.claude/CLAUDE.md   bundle_sha256 = home/CLAUDE.md"
+  ],
+  "reconciled": "2026-08-19",
+  "source_sha256": "60f786cc97859b5f81c028dee62c842c75c1f204a92c9ad72629a5becc7b2a34",
+  "bundle_sha256": "687f3b266a292164c06430a3a88a427fa70cbc702100ae8c6ae2f069de753e3b",
+  "notes": "Second pass: carried over rules 9 and 10 plus the private-registry line, and marked the rescoped-rule note in EXCLUDED.md resolved."
+}

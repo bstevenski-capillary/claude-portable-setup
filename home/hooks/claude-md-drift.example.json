@@ -1,0 +1,9 @@
+{
+  "_comment": [
+    "Config for claude-md-drift.sh. Copy to claude-md-drift.json and set the path.",
+    "  bundle   absolute path to this bundle's git checkout ('~' is expanded)",
+    "No config file at all = the check is silent, by design: it was never asked for.",
+    "A config that exists but cannot be read IS reported — cannot-verify is a finding."
+  ],
+  "bundle": "~/projects/claude-portable-setup"
+}

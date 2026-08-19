@@ -24,6 +24,8 @@ existing config without asking.
 | `home/skills/visual-decisions/` | `~/.claude/skills/` | Personal skill: render a visual before any non-trivial decision, with a latency/cost level dial |
 | `home/hooks/tooling-rot-siren.sh` | `~/.claude/hooks/` | SessionStart hook: catches degraded local tooling (missing/disabled plugin, stale marketplace checkout, CLI-vs-plugin version skew) before work starts |
 | `home/hooks/rot-watch.example.json` | `~/.claude/hooks/` | Watchlist config for the siren. No config = silent. |
+| `home/hooks/claude-md-drift.sh` | `~/.claude/hooks/` | SessionStart hook: flags when the live rules and this bundle have drifted apart, so the bundle can't quietly ship a rule set you no longer run |
+| `home/hooks/claude-md-baseline.json` | stays in the bundle | The fingerprints both files had at the last reconciliation. `git log` on it is the reconciliation history |
 | `home/settings.template.json` | merge into `~/.claude/settings.json` | Model, effort, theme, notifications, empty-by-design permissions, plugin list, hook wiring |
 | `home/memory/` | `~/.claude/projects/<project>/memory/` | Seed memory: the visual-learner fact |
 
