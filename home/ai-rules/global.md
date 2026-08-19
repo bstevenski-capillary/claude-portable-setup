@@ -80,6 +80,11 @@ Even ones unrelated to the current change. If a failure can't be resolved in the
 session, open a tracking issue to follow it up. Do not narrow the scope of
 "passing" to mean "the part I touched passes".
 
+File it rather than mention it: on a small, fast-moving team the **tracker is
+where status lives** — not chat, not a doc, not a session transcript. So read the
+tracker before assuming something is unknown or unowned, and when you find
+something, leave it somewhere that survives the session.
+
 ## 6. End long turns with a "Where we are" trail marker
 
 I run several agent instances across two laptops, so I come back to a session
@@ -178,6 +183,13 @@ Reach for available tools, MCP servers, and skills to speed up development
 rather than reimplementing their work by hand. Prefer the specific tool over the
 general one when both apply.
 
+Prefer the specific tool over the general one, and — when both exist — the one
+**my own org maintains** over a third-party lookalike with a similar name. The
+first-party one encodes our conventions, gates, and review expectations; a
+lookalike quietly substitutes someone else's. Keep the concrete task-to-tool
+mapping in machine-local config, since the useful version of that table names
+internal tooling.
+
 ## 12. Teachable moments
 
 Give a human-readable summary of changes and *why*, plus expected outcomes
@@ -208,6 +220,12 @@ Defaults for when a repo is silent. **Repo-local config always wins.**
   (or asdf/mise) before installing or building. Never assume the global version.
 - **Package manager:** respect the repo's lockfile — pnpm, yarn, and npm are all
   in play. Never migrate a repo between package managers.
+- **Private registries & secrets:** a repo that installs from a private registry
+  needs a scoped read token in the environment before install — expect that to be
+  the first thing that breaks on a fresh clone, and look for an `.npmrc` or
+  equivalent rather than guessing. Runtime secrets come from a password manager,
+  never the repo; `.env` stays gitignored, and a missing one is a setup step, not
+  a reason to inline a value.
 
 ## Commits & branches
 
@@ -219,6 +237,9 @@ Defaults for when a repo is silent. **Repo-local config always wins.**
 - **Always branch before starting new work**, off the latest `main` (or the
   repo's target branch) — fetch remote first, at minimum at task start, before
   branching, and before pushing.
+  Fetch **periodically during long-running work** too: on these teams `main` can
+  move inside a single session, and a stale base is how two agents produce
+  conflicting versions of the same fix.
 
 ## Concurrency & worktrees
 
