@@ -44,7 +44,21 @@ version skew — before any work starts.
   published; silence is earned by declaring the gap, never by omitting the key.
 
 If the siren fires, surface it in the first message of the session and treat it
-as outranking new work.
+as outranking new work — then **put it to the user as an `AskUserQuestion`
+yes/no before starting anything else** (shared rule 2). A siren reported as a
+bullet in a status message gets read and stepped over; only a blocking ask
+actually gets answered. Options should be *fix now* / *defer*, with the cost of
+deferring stated in the option description.
+
+- **Scope the ask before asking.** Check how the tool is pinned where it
+  matters. A `@N` major-range pin (`@harness-engineering/cli@10`) floats to the
+  newest `N.x`, so CI is already on the new release and only the local install
+  is stale — that is a one-line `npm i -g`, not a pin migration. An exact pin is
+  the case that needs the full version-tracking ceremony. Reporting the heavy
+  version of a light finding is its own kind of noise.
+- **Re-run the siren after fixing** and say that it cleared. Confirm the
+  watchlist is non-empty when it goes quiet — under this hook's own rules,
+  silence and "no config" look identical, so unverified silence isn't a pass.
 
 ## Context instruments
 
