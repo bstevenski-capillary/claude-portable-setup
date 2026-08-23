@@ -1,11 +1,17 @@
 # Load-bearing-minimum tier: the two agent-loop gates that keep quality holding
 # when the senior is away — multi-persona review and the outcome-eval ship gate.
-# Scaffolded verbatim by `harness init --level load-bearing-minimum`.
+# Scaffolded by `harness init --level load-bearing-minimum`, then hardened; the
+# two deviations from the scaffold are marked HARDENED below and are deliberate,
+# so a future `harness init` that overwrites them is a regression, not an update.
 #
 # Both jobs run `pull_request` against `main`. Edit `branches:` if your default
 # branch differs, and `--block-on` to change the severity that fails the check.
 # The heuristic floor of both gates runs on any runner; the LLM tier activates
 # only when an API-key secret is present, degrading gracefully otherwise.
+#
+# The trigger is `pull_request`, never `pull_request_target`: a fork PR then
+# receives no secrets at all, so the LLM tier degrades to its heuristic floor on
+# outside contributions rather than handing an unreviewed branch the org's keys.
 name: Required Review
 
 on:
@@ -20,12 +26,6 @@ jobs:
   required-review:
     name: required-review
     runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      HARNESS_LOCAL_ENDPOINT: ${{ secrets.HARNESS_LOCAL_ENDPOINT }}
-      HARNESS_LOCAL_MODEL: ${{ secrets.HARNESS_LOCAL_MODEL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,19 +36,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g @harness-engineering/cli
+      # HARDENED (1/2): pinned exactly, not floated to `latest`. An unpinned
+      # global install is a third party's newest publish running on our runner;
+      # pinned, an upgrade is a reviewable diff instead of a silent event. Bump
+      # deliberately — 11.3.0 is the version these gates were validated against.
+      - run: npm install -g @harness-engineering/cli@11.3.0
       - name: Multi-persona review gate
+        # HARDENED (2/2): the secrets live on this step, not on the job. The
+        # scaffold put them in job-level `env`, which handed all five to
+        # checkout, git fetch, setup-node and the npm install as well — so a
+        # bad publish of the CLI would have read them at *install* time, before
+        # any gate ran. Only this step needs them; only this step gets them.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HARNESS_LOCAL_ENDPOINT: ${{ secrets.HARNESS_LOCAL_ENDPOINT }}
+          HARNESS_LOCAL_MODEL: ${{ secrets.HARNESS_LOCAL_MODEL }}
         run: harness review-ci --runner claude --block-on request-changes --diff "origin/${{ github.base_ref }}...HEAD"
 
   outcome-eval:
     name: outcome-eval
     runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      HARNESS_LOCAL_ENDPOINT: ${{ secrets.HARNESS_LOCAL_ENDPOINT }}
-      HARNESS_LOCAL_MODEL: ${{ secrets.HARNESS_LOCAL_MODEL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,8 +67,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g @harness-engineering/cli
+      # HARDENED (1/2): see the note in `required-review`. Keep both pins on the
+      # same version — two gates running different CLI builds would make a
+      # disagreement between them unattributable.
+      - run: npm install -g @harness-engineering/cli@11.3.0
       - name: Outcome-eval ship gate
         # Judges the change against its spec; blocks only on a high-confidence
         # NOT_SATISFIED. Auto-discovers the spec from the diff.
+        # HARDENED (2/2): step-scoped secrets, as above.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HARNESS_LOCAL_ENDPOINT: ${{ secrets.HARNESS_LOCAL_ENDPOINT }}
+          HARNESS_LOCAL_MODEL: ${{ secrets.HARNESS_LOCAL_MODEL }}
         run: harness outcome-eval-ci --block-on blocking --diff "origin/${{ github.base_ref }}...HEAD"
