@@ -869,8 +869,20 @@ This creates real, public, permanent artifacts in
    Ordering constraint: this must land *before* any hook is ported — parity is
    proven against the bash baseline while it is still the only implementation."
    ```
-4. Record the created numbers: `gh issue list --limit 30 --state open`
-5. No commit — this task produces no files.
+4. **Carried in from t1 (added 2026-08-23):** open one further issue, outside the
+   13 roadmap items and outside any milestone, for an unreconciled denominator
+   found while adopting the CLI. `harness check-deps` reports
+   `Analyzed 13 module(s) across 3 layer(s)` against **10** real files in
+   `home/hooks/`, `tools/`, and `tests/` — the `--json` output exposes only
+   `modulesAnalyzed`, never the list, so the extra three cannot be identified
+   from outside the tool. It over-counts rather than under-counts, so it is not
+   a false green and did not block t1; but a gate whose denominator cannot be
+   reconciled is exactly what this repo refuses to wave through, and an
+   unexplained count is a finding under the "cannot verify is a finding" rule.
+   Title it so the count is in the title, and note that a *later* drop below 10
+   would be the dangerous direction.
+5. Record the created numbers: `gh issue list --limit 30 --state open`
+6. No commit — this task produces no files.
 
 ---
 
