@@ -46,6 +46,13 @@ that actually catches false green:
   it was meant to inspect, report that rather than reporting nothing.
 - **Silently-degraded tooling is a headline alert** — say what was dark, since
   when, and what wasn't protected.
+- **A degraded-tooling finding is a decision, not a status line.** Put it to me
+  as an explicit yes/no ask — fix now, or defer with the cost of deferring
+  stated — and don't start other work until it's answered. Reporting it in a
+  bullet and moving on is how a finding becomes wallpaper: it *reads* as handled
+  when nothing was actually decided, which is the same false-green shape the
+  rule exists to catch. Also **verify the fix cleared it** — re-run the check
+  rather than assuming the upgrade worked.
 
 Apply this where a green result is load-bearing: coverage gates, security
 scans, migration and deploy steps, anything whose passing lets work merge. Don't
