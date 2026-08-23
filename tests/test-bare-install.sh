@@ -110,19 +110,35 @@ assert_not "abstention" "$OUT" "  and does not quietly report an abstention as s
 assert_has "check(s)" "$OUT" "install run → names how many checks ran"
 assert_not "0 check(s)" "$OUT" "  and the count is never zero"
 
+# A minimal stand-in bundle: `home/` plus the two scripts, which is everything
+# bare-install.sh and check-drift.sh read. Cases then perturb exactly one
+# artifact inside the copy, so every finding traces to one edit — and because
+# BUNDLE derives from `dirname "$0"`, pointing the script at the copy is the
+# entire fixture, with no test-only seam in the production code.
+#
+# Deliberately not `cp -R "$BUNDLE/."`: that drags .git along, and six cases
+# each cloning the repo turns a fast suite into one nobody runs.
+make_fake_bundle() {
+  local d
+  d=$(mktemp -d)
+  mkdir -p "$d/tools"
+  cp -R "$BUNDLE/home" "$d/home"
+  cp "$BUNDLE/tools/check-drift.sh" "$BUNDLE/tools/bare-install.sh" "$d/tools/"
+  chmod +x "$d/tools"/*.sh
+  printf '%s' "$d"
+}
+
 # ── 3. SC-3: an abstaining drift check is a FAILURE, not a pass ──────────────
 # The load-bearing case. A stubbed check-drift.sh that prints nothing and exits
 # 2 stands in for the real failure this guards: an install that placed no files,
 # leaving the drift check with nothing to compare. Accepting that as green would
 # certify a bundle that installs nothing at all.
-FAKE=$(mktemp -d)
-cp -R "$BUNDLE/." "$FAKE/fakebundle" 2>/dev/null
-printf '#!/bin/bash\nexit 2\n' > "$FAKE/fakebundle/tools/check-drift.sh"
-chmod +x "$FAKE/fakebundle/tools/check-drift.sh"
-OUT3=$(run_bare "$FAKE/fakebundle/tools/bare-install.sh"); RC3=$(rc_of "$FAKE/fakebundle/tools/bare-install.sh")
+FAKE=$(make_fake_bundle)
+printf '#!/bin/bash\nexit 2\n' > "$FAKE/tools/check-drift.sh"
+chmod +x "$FAKE/tools/check-drift.sh"
+OUT3=$(run_bare "$FAKE/tools/bare-install.sh"); RC3=$(rc_of "$FAKE/tools/bare-install.sh")
 assert_rc 1 "$RC3" "drift check exits 2 → install fails"
 assert_has "abstention" "$OUT3" "  and the failure says which failure it was"
-rm -rf "$FAKE"
 
 # ── 4. the success path leaves no scratch state behind ───────────────────────
 # A tool that installs into $TMPDIR and never cleans up turns a CI matrix into a
@@ -138,5 +154,88 @@ else
                       || bad "  and removes it when the install succeeds" \
                              "$SCRATCH gone" "$SCRATCH still present"
 fi
+
+# ── 5. SC-4: the uncovered targets are named on the PASS path ────────────────
+# This job installs INSTALL.md §§1-4 and verifies §§1-4. It never touches §5
+# (settings.json is a merge target, not a copy target) or §6 (memory seeds
+# accumulate), so an unqualified "verified" would claim coverage it does not
+# have.
+#
+# The assertion is on "not verified" specifically, and not on the section names:
+# check-drift.sh's own output already contains "not compared: settings.json ...
+# memory/ seeds", so asserting those here would pass on the wrong script's
+# disclosure. Case 6 is where they are pinned honestly — there, the stubbed
+# drift check prints nothing at all, so anything on screen came from
+# bare-install.sh itself.
+assert_has "not verified" "$OUT" "pass path → discloses what it did NOT verify"
+
+# ── 6. ...and on the FAIL path ───────────────────────────────────────────────
+# Verbatim from the reasoning check-drift.sh already carries: printing the
+# caveat only on green would imply a red run's findings were exhaustive. A
+# reader who sees one finding and no caveat concludes there was one problem.
+assert_has "not verified" "$OUT3" "fail path → discloses its uncovered targets too"
+assert_has "settings.json" "$OUT3" "  names settings.json, with no drift output to borrow it from"
+assert_has "memory" "$OUT3" "  and names the memory seeds"
+rm -rf "$FAKE"
+
+# ── 7. the resolver prefers check_drift.py when it exists ────────────────────
+# M2 ports check-drift.sh to Python. If this script kept hardcoding the .sh
+# path, SC-3 would go silently unrun the moment the rename landed — the job
+# would still be green, still be called "bare install verified", and be
+# checking a file nobody maintained any more. That is the repo's founding
+# failure shape, so the handover is pinned before the rename exists.
+FAKE7=$(make_fake_bundle)
+printf 'print("PYDRIFT-MARKER")\n' > "$FAKE7/tools/check_drift.py"
+OUT7=$(run_bare "$FAKE7/tools/bare-install.sh"); RC7=$(rc_of "$FAKE7/tools/bare-install.sh")
+assert_rc 0 "$RC7" "both artifacts present → exit 0"
+assert_has "PYDRIFT-MARKER" "$OUT7" "  and check_drift.py is the one that ran"
+rm -rf "$FAKE7"
+
+# ── 8. ...and falls back to check-drift.sh when only it exists ───────────────
+# Today's reality. The fallback must stay working for the whole of M1, or this
+# task breaks the branch it is written on.
+FAKE8=$(make_fake_bundle)
+OUT8=$(run_bare "$FAKE8/tools/bare-install.sh"); RC8=$(rc_of "$FAKE8/tools/bare-install.sh")
+assert_rc 0 "$RC8" "only check-drift.sh present → exit 0"
+assert_not "PYDRIFT-MARKER" "$OUT8" "  and no Python artifact is invented"
+rm -rf "$FAKE8"
+
+# ── 9. neither artifact exists → hard failure, named ─────────────────────────
+# A criterion that could not run is not a criterion that passed. Silently
+# skipping the verification would leave a job that installs files, checks
+# nothing, and exits 0 — precisely the abstention case 3 exists to reject,
+# arriving through a different door.
+#
+# Note for t7: the `assert_rc 1` below passes *today*, but for the wrong reason
+# — bash cannot execute the absent path, so the run dies with 127 and the
+# script reports "drift check exited 127". Red for an unintended reason is not
+# the same as green, which is why the companion assertion on the message is the
+# one that actually holds t7 to a named, deliberate failure.
+FAKE9=$(make_fake_bundle)
+rm -f "$FAKE9/tools/check-drift.sh" "$FAKE9/tools/check_drift.py"
+OUT9=$(run_bare "$FAKE9/tools/bare-install.sh"); RC9=$(rc_of "$FAKE9/tools/bare-install.sh")
+assert_rc 1 "$RC9" "no drift artifact at all → install fails"
+assert_has "no drift artifact" "$OUT9" "  and says the checker itself was missing"
+
+# ── 10. the disclosure survives that path too ────────────────────────────────
+assert_has "not verified" "$OUT9" "missing-checker path → still discloses uncovered targets"
+rm -rf "$FAKE9"
+
+# ── 11. a caller-supplied root is installed into, never deleted ──────────────
+# The cleanup trap is armed only for a root this script created (OWNED_TMP).
+# Verified by hand during t5 and left unpinned, which is how a safety property
+# quietly becomes false: nothing here would have failed if the trap started
+# removing whatever path it was handed. Folded in from t5's testing-gap note.
+GIVEN="$(mktemp -d)/given"
+bash "$BARE" "$GIVEN" >/dev/null 2>&1; RC11=$?
+assert_rc 0 "$RC11" "caller-supplied root → exit 0"
+[ -d "$GIVEN" ] && ok "  and the directory is left in place, not removed" \
+                || bad "  and the directory is left in place, not removed" \
+                       "$GIVEN still present" "removed by the cleanup trap"
+[ -f "$GIVEN/.claude/hooks/tooling-rot-siren.sh" ] \
+  && ok "  and the hooks actually landed in it" \
+  || bad "  and the hooks actually landed in it" \
+         "a hook at $GIVEN/.claude/hooks/" "absent"
+rm -rf "$(dirname "$GIVEN")"
 
 tally
