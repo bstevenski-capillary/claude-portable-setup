@@ -69,8 +69,32 @@ chmod +x "$ROOT"/.claude/hooks/*.sh
 # allowlist while a live file grows entries, and seeds accumulate — so
 # installing them here would claim coverage this verification does not have.
 
+# SC-4. This job installs INSTALL.md §§1-4 and verifies §§1-4. It never touches
+# §5 (settings.json is a merge target, not a copy target) or §6 (the memory
+# seeds accumulate), so an unqualified "verified" would claim coverage it does
+# not have. Printed on every non-early-exit path, including the failures:
+# disclosing only on green would imply a red run's findings were exhaustive.
+print_uncovered() {
+  printf '  not verified: settings.json (INSTALL.md §5), memory/ seeds (§6)\n'
+  printf '  — this job proves 4 of the 6 things INSTALL.md deploys\n'
+}
+
 # ── the verification ─────────────────────────────────────────────────────────
-OUT=$(CHECK_ROOT="$ROOT" bash "$BUNDLE/tools/check-drift.sh" 2>&1)
+# SC-3 must survive M2's bash-to-Python rename. A job hardcoding the old
+# filename would find nothing afterwards and — depending on how it was written —
+# either fail confusingly or skip the criterion silently, which is the worse of
+# the two because the run stays green. Prefer the Python artifact once it
+# exists; fail hard, and by name, when neither does.
+if   [ -f "$BUNDLE/tools/check_drift.py" ]; then DRIFT=(python3 "$BUNDLE/tools/check_drift.py")
+elif [ -f "$BUNDLE/tools/check-drift.sh" ]; then DRIFT=(bash    "$BUNDLE/tools/check-drift.sh")
+else
+  printf '✘ no drift artifact — neither tools/check_drift.py nor tools/check-drift.sh\n'
+  printf '  exists, so SC-3 did not run. That is an abstention, not a pass.\n'
+  print_uncovered
+  exit 1
+fi
+
+OUT=$(CHECK_ROOT="$ROOT" "${DRIFT[@]}" 2>&1)
 rc=$?
 printf '%s\n' "$OUT"
 
@@ -84,4 +108,5 @@ case "$rc" in
      STATUS=1 ;;
 esac
 
+print_uncovered
 exit "$STATUS"
