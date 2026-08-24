@@ -84,3 +84,51 @@ jobs:
 
       - name: gate 4 — tests
         run: ./tests/run-all.sh
+
+  # Job id is bare_install, NOT bare-install. GitHub expression syntax reads
+  # `needs.bare-install.result` as a subtraction, so a hyphen here makes the
+  # aggregate job below silently evaluate the wrong thing — a false green in
+  # the very job that exists to prevent false greens.
+  bare_install:
+    name: bare install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: carry out INSTALL.md into a scratch HOME and prove it landed
+        # SC-3: exit 0, never the exit-2 abstention — an install that copied
+        # zero files would leave the drift check with nothing to compare, and
+        # a job accepting any non-1 status would certify exactly that.
+        # SC-4: the script names what it did not verify, on pass and on fail.
+        run: ./tools/bare-install.sh
+
+  gates-complete:
+    name: gates-complete
+    # always() so a skipped or cancelled dependency still reaches this job.
+    # Without it, this job would itself be skipped — and a skipped required
+    # check is exactly the abstention-wearing-a-pass shape it exists to catch.
+    if: always()
+    needs: [gates, bare_install]
+    runs-on: ubuntu-latest
+    steps:
+      - name: a skipped leg is not a pass
+        env:
+          GATES: ${{ needs.gates.result }}
+          BARE: ${{ needs.bare_install.result }}
+        run: |
+          set -u
+          rc=0
+          for pair in "gates:$GATES" "bare_install:$BARE"; do
+            name=${pair%%:*}; res=${pair#*:}
+            case "$res" in
+              success) printf '  ok       %s\n' "$name" ;;
+              skipped) printf '::error::%s was SKIPPED — zero legs ran. Abstention, not a pass.\n' "$name"; rc=1 ;;
+              '')      printf '::error::%s reported no result at all.\n' "$name"; rc=1 ;;
+              *)       printf '::error::%s reported %s.\n' "$name" "$res"; rc=1 ;;
+            esac
+          done
+          printf '  matrix legs required: ubuntu-latest, macos-latest (windows-latest lands in M2)\n'
+          exit "$rc"
